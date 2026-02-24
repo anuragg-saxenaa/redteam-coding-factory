@@ -14,24 +14,35 @@ const CodingFactory = require('../src/factory');
 // --- Configuration ---
 const TEST_REPO_NAME = 'integration-test-repo';
 const TEST_REPO_PATH = path.join(__dirname, TEST_REPO_NAME);
+const TEST_BARE_REPO_PATH = path.join(__dirname, TEST_REPO_NAME + '.git');
 const FACTORY_CONFIG = {
-  baseRepo: TEST_REPO_PATH,
+  baseRepo: TEST_BARE_REPO_PATH, // Point to bare repo from the start
   dataDir: path.join(TEST_REPO_PATH, '.factory-data'),
   worktreeRoot: path.join(TEST_REPO_PATH, '.worktrees'),
   validationMode: 'default',
-  enablePush: false, // Default to false for dry runs
-  createPR: false,   // Default to false for dry runs
-  gitHubCliPath: 'gh' // Assume gh CLI is available
+  enablePush: false,
+  createPR: false,
+  gitHubCliPath: 'gh'
 };
 
 // --- Helper Functions ---
 function setupTestRepo() {
   console.log(`\n--- Setting up test repository: ${TEST_REPO_PATH} ---`);
+  
+  // Clean up any existing repos
   if (fs.existsSync(TEST_REPO_PATH)) {
     execSync(`rm -rf ${TEST_REPO_PATH}`);
   }
-  fs.mkdirSync(TEST_REPO_PATH, { recursive: true });
-  execSync(`git init -b main ${TEST_REPO_PATH}`);
+  if (fs.existsSync(TEST_BARE_REPO_PATH)) {
+    execSync(`rm -rf ${TEST_BARE_REPO_PATH}`);
+  }
+
+  // Create a bare repository
+  execSync(`git init --bare ${TEST_BARE_REPO_PATH}`);
+
+  // Clone it to a working directory to make an initial commit
+  execSync(`git clone ${TEST_BARE_REPO_PATH} ${TEST_REPO_PATH}`);
+  
   execSync(`git -C ${TEST_REPO_PATH} config user.email "test@example.com"`);
   execSync(`git -C ${TEST_REPO_PATH} config user.name "Test User"`);
   fs.writeFileSync(path.join(TEST_REPO_PATH, 'README.md'), '# Integration Test Repo\n');
@@ -45,6 +56,10 @@ function setupTestRepo() {
   }, null, 2));
   execSync(`git -C ${TEST_REPO_PATH} add .`);
   execSync(`git -C ${TEST_REPO_PATH} commit -m "Initial commit for integration tests"`);
+  
+  // Push initial commit to bare repo
+  execSync(`git -C ${TEST_REPO_PATH} push origin main`);
+
   console.log('Test repo setup complete.');
 }
 
@@ -52,6 +67,9 @@ function teardownTestRepo() {
   console.log(`\n--- Tearing down test repository: ${TEST_REPO_PATH} ---`);
   if (fs.existsSync(TEST_REPO_PATH)) {
     execSync(`rm -rf ${TEST_REPO_PATH}`);
+  }
+  if (fs.existsSync(TEST_BARE_REPO_PATH)) {
+    execSync(`rm -rf ${TEST_BARE_REPO_PATH}`);
   }
   console.log('Test repo teardown complete.');
 }
