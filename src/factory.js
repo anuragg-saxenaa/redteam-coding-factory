@@ -1,12 +1,13 @@
 /**
- * Coding Factory Orchestrator — Phase 1 + Phase 2 + Phase 3
- * Coordinates task intake, worktree creation, agent execution, and autonomous loop
+ * Coding Factory Orchestrator — Phase 1 + Phase 2 + Phase 3 + Phase 4
+ * Coordinates task intake, worktree creation, agent execution, validation, and autonomous loop
  */
 
 const TaskManager = require('./task-manager');
 const WorktreeManager = require('./worktree-manager');
 const CodeExecutor = require('./code-executor');
 const AgentIntegration = require('./agent-integration');
+const ResultValidator = require('./result-validator');
 const path = require('path');
 
 class CodingFactory {
@@ -14,11 +15,14 @@ class CodingFactory {
     this.baseRepo = config.baseRepo || process.cwd();
     this.dataDir = config.dataDir || './data';
     this.worktreeRoot = config.worktreeRoot || './worktrees';
+    this.validationMode = config.validationMode || 'default'; // 'default' or 'strict'
+    this.enablePush = config.enablePush || false; // safety: disabled by default
 
     this.taskManager = new TaskManager(path.join(this.dataDir, 'task-queue.jsonl'));
     this.worktreeManager = new WorktreeManager(this.baseRepo, this.worktreeRoot);
     this.executor = new CodeExecutor(this.worktreeManager);
     this.agentIntegration = new AgentIntegration(this);
+    this.validator = new ResultValidator(this.taskManager, this);
     
     this.isRunning = false;
   }
@@ -39,6 +43,7 @@ class CodingFactory {
    * Phase 1: create worktree, mark as in_progress
    * Phase 2: execute code (lint, test, commit)
    * Phase 3: spawn agent for autonomous work
+   * Phase 4: validate results and enqueue fixes if needed
    */
   async processNext(useAgent = false) {
     const task = this.taskManager.next();
@@ -58,21 +63,15 @@ class CodingFactory {
       this.taskManager.start(task.id, wt.id);
       console.log(`[Factory] Task ${task.id} now in_progress`);
 
+      let executionResult;
+
       // Phase 3: Spawn agent if requested
       if (useAgent) {
         console.log(`[Factory] Spawning agent for task ${task.id}...`);
         const agentSpawn = await this.agentIntegration.spawnAgent(task, wt);
         const agentResult = await this.agentIntegration.waitForAgent(agentSpawn.agentSessionKey);
         
-        if (agentResult.status === 'completed') {
-          this.completeTask(task.id, agentResult);
-          return {
-            taskId: task.id,
-            worktreeId: wt.id,
-            worktreePath: wt.path,
-            agentResult
-          };
-        } else {
+        if (agentResult.status !== 'completed') {
           this.failTask(task.id, `Agent failed: ${agentResult.error}`);
           return {
             taskId: task.id,
@@ -82,30 +81,42 @@ class CodingFactory {
             failed: true
           };
         }
+        executionResult = agentResult;
+      } else {
+        // Phase 2: Execute code inside worktree (fallback if no agent)
+        console.log(`[Factory] Executing task ${task.id}...`);
+        executionResult = await this.executor.execute(task);
       }
 
-      // Phase 2: Execute code inside worktree (fallback if no agent)
-      console.log(`[Factory] Executing task ${task.id}...`);
-      const executionResult = await this.executor.execute(task);
+      // Phase 4: Validate results
+      console.log(`[Factory] Validating task ${task.id}...`);
+      const validationResult = this.validator.validate(task, executionResult, this.validationMode);
+      this.validator.attachValidationResult(task.id, validationResult);
 
-      if (executionResult.success) {
-        this.completeTask(task.id, executionResult);
-        return {
-          taskId: task.id,
-          worktreeId: wt.id,
-          worktreePath: wt.path,
-          executionResult
-        };
-      } else {
-        this.failTask(task.id, executionResult.errors.join('; '));
+      if (!validationResult.valid) {
+        console.log(`[Factory] Task ${task.id} validation failed, enqueueing fix subtask`);
+        const fixTask = this.validator.enqueueFix(task, validationResult);
+        this.failTask(task.id, `Validation failed: ${validationResult.errors.join('; ')}`);
         return {
           taskId: task.id,
           worktreeId: wt.id,
           worktreePath: wt.path,
           executionResult,
+          validationResult,
+          fixTaskId: fixTask ? fixTask.id : null,
           failed: true
         };
       }
+
+      // Validation passed
+      this.completeTask(task.id, executionResult);
+      return {
+        taskId: task.id,
+        worktreeId: wt.id,
+        worktreePath: wt.path,
+        executionResult,
+        validationResult
+      };
     } catch (error) {
       console.error(`[Factory] Error processing task ${task.id}:`, error.message);
       this.taskManager.fail(task.id, error.message);
@@ -124,7 +135,7 @@ class CodingFactory {
     }
 
     this.isRunning = true;
-    console.log(`[Factory] Starting autonomous loop (interval: ${intervalMs}ms, useAgent: ${useAgent})`);
+    console.log(`[Factory] Starting autonomous loop (interval: ${intervalMs}ms, useAgent: ${useAgent}, validationMode: ${this.validationMode})`);
 
     while (this.isRunning) {
       const result = await this.processNext(useAgent);
@@ -189,7 +200,9 @@ class CodingFactory {
       failed,
       total: tasks.length,
       worktrees: this.worktreeManager.list().length,
-      isRunning: this.isRunning
+      isRunning: this.isRunning,
+      validationMode: this.validationMode,
+      enablePush: this.enablePush
     };
   }
 }
