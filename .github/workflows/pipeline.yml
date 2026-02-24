@@ -1,7 +1,6 @@
 name: coding-factory-pipeline
 
-on:
-  push: {}
+on: [push, pull_request]
 
 jobs:
   lint_shell:
