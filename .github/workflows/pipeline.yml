@@ -1,6 +1,6 @@
 name: coding-factory-pipeline
 
-on:
+"on":
   push: {}
   pull_request: {}
 
