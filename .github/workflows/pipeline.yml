@@ -1,23 +1,30 @@
 name: coding-factory-pipeline
 
 on:
-  push:
-  pull_request:
+  push: {}
+  pull_request: {}
+
+permissions:
+  contents: read
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Show context
-        run: |
-          echo "repo=$GITHUB_REPOSITORY"
-          echo "ref=$GITHUB_REF"
       - name: Shellcheck (scripts)
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck
           shellcheck -x scripts/*.sh
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Runner help works
+        run: |
+          bash scripts/factory-run.sh --help
 
   docs:
     runs-on: ubuntu-latest
