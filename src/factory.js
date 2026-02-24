@@ -1,11 +1,12 @@
 /**
- * Coding Factory Orchestrator — Phase 1 + Phase 2
- * Coordinates task intake, worktree creation, code execution, and cleanup
+ * Coding Factory Orchestrator — Phase 1 + Phase 2 + Phase 3
+ * Coordinates task intake, worktree creation, agent execution, and autonomous loop
  */
 
 const TaskManager = require('./task-manager');
 const WorktreeManager = require('./worktree-manager');
 const CodeExecutor = require('./code-executor');
+const AgentIntegration = require('./agent-integration');
 const path = require('path');
 
 class CodingFactory {
@@ -17,6 +18,9 @@ class CodingFactory {
     this.taskManager = new TaskManager(path.join(this.dataDir, 'task-queue.jsonl'));
     this.worktreeManager = new WorktreeManager(this.baseRepo, this.worktreeRoot);
     this.executor = new CodeExecutor(this.worktreeManager);
+    this.agentIntegration = new AgentIntegration(this);
+    
+    this.isRunning = false;
   }
 
   /**
@@ -34,8 +38,9 @@ class CodingFactory {
    * Process next task in queue
    * Phase 1: create worktree, mark as in_progress
    * Phase 2: execute code (lint, test, commit)
+   * Phase 3: spawn agent for autonomous work
    */
-  async processNext() {
+  async processNext(useAgent = false) {
     const task = this.taskManager.next();
     if (!task) {
       console.log('[Factory] No tasks in queue');
@@ -53,7 +58,33 @@ class CodingFactory {
       this.taskManager.start(task.id, wt.id);
       console.log(`[Factory] Task ${task.id} now in_progress`);
 
-      // Phase 2: Execute code inside worktree
+      // Phase 3: Spawn agent if requested
+      if (useAgent) {
+        console.log(`[Factory] Spawning agent for task ${task.id}...`);
+        const agentSpawn = await this.agentIntegration.spawnAgent(task, wt);
+        const agentResult = await this.agentIntegration.waitForAgent(agentSpawn.agentSessionKey);
+        
+        if (agentResult.status === 'completed') {
+          this.completeTask(task.id, agentResult);
+          return {
+            taskId: task.id,
+            worktreeId: wt.id,
+            worktreePath: wt.path,
+            agentResult
+          };
+        } else {
+          this.failTask(task.id, `Agent failed: ${agentResult.error}`);
+          return {
+            taskId: task.id,
+            worktreeId: wt.id,
+            worktreePath: wt.path,
+            agentResult,
+            failed: true
+          };
+        }
+      }
+
+      // Phase 2: Execute code inside worktree (fallback if no agent)
       console.log(`[Factory] Executing task ${task.id}...`);
       const executionResult = await this.executor.execute(task);
 
@@ -80,6 +111,39 @@ class CodingFactory {
       this.taskManager.fail(task.id, error.message);
       return null;
     }
+  }
+
+  /**
+   * Start autonomous loop
+   * Continuously processes tasks from queue
+   */
+  async startAutonomousLoop(useAgent = false, intervalMs = 5000) {
+    if (this.isRunning) {
+      console.log('[Factory] Autonomous loop already running');
+      return;
+    }
+
+    this.isRunning = true;
+    console.log(`[Factory] Starting autonomous loop (interval: ${intervalMs}ms, useAgent: ${useAgent})`);
+
+    while (this.isRunning) {
+      const result = await this.processNext(useAgent);
+      
+      if (!result) {
+        console.log('[Factory] Queue empty, waiting...');
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+      } else {
+        console.log(`[Factory] Task ${result.taskId} processed`);
+      }
+    }
+  }
+
+  /**
+   * Stop autonomous loop
+   */
+  stopAutonomousLoop() {
+    this.isRunning = false;
+    console.log('[Factory] Autonomous loop stopped');
   }
 
   /**
@@ -125,6 +189,7 @@ class CodingFactory {
       failed,
       total: tasks.length,
       worktrees: this.worktreeManager.list().length,
+      isRunning: this.isRunning
     };
   }
 }
