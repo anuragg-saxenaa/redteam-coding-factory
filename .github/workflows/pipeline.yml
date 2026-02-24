@@ -1,10 +1,32 @@
-name: test-actions
+name: coding-factory-pipeline
 
 on:
   push: {}
+  pull_request: {}
+
+permissions:
+  contents: read
 
 jobs:
-  hello:
+  lint_shell:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "hello"
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Shellcheck
+        run: shellcheck -x scripts/*.sh
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Runner help
+        run: bash scripts/factory-run.sh --help
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Markdown sanity
+        run: python3 -c "import pathlib,sys; bad=[str(p) for p in pathlib.Path('.').rglob('*.md') if '\\r\\n' in p.read_text(errors='ignore')]; print('md ok' if not bad else 'CRLF found: '+', '.join(bad)); sys.exit(0 if not bad else 1)"
