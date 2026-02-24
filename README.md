@@ -1,46 +1,101 @@
 # RedTeam Coding Factory
 
-An R&D repo for building an autonomous, self-healing “coding factory”:
-- worktree-per-task isolation
-- optional tmux runtime
-- CI/review “reactions” loop
-- metrics + dashboards
+Autonomous coding factory with multi-repo orchestration. Phases 1-6 complete and production-ready.
 
-## Quick start
+## Quick Start
 
-1) Install prerequisites:
-- git
-- gh (GitHub CLI)
-- node >= 20
-- (optional) tmux
+```javascript
+const RedTeamFactory = require('./src/redteam-factory');
 
-2) Run a local session (stub for now):
+const factory = new RedTeamFactory({
+  workspaceRoot: '/path/to/workspace',
+  dataDir: '/path/to/.factory-data',
+  enablePush: false,      // Safety: disabled by default
+  createPR: false         // Safety: disabled by default
+});
+
+// Register repos
+factory.initialize([
+  { name: 'repo1', path: '/path/to/repo1.git', branch: 'main' },
+  { name: 'repo2', path: '/path/to/repo2.git', branch: 'main' }
+]);
+
+// Submit tasks
+factory.submitTask('repo1', {
+  title: 'Fix bug in repo1',
+  description: 'Details here',
+  repo: '/path/to/repo1.git',
+  branch: 'main'
+});
+
+// Run autonomously
+const results = await factory.run();
+console.log(results);
+```
+
+## Configuration
+
+### Repo Allowlist
+
+Define which repos the factory can access:
+
+```javascript
+const repos = [
+  { name: 'core', path: '/repos/core.git', branch: 'main' },
+  { name: 'api', path: '/repos/api.git', branch: 'main' },
+  { name: 'web', path: '/repos/web.git', branch: 'main' }
+];
+
+factory.initialize(repos);
+```
+
+### Concurrency Caps
+
+Control how many tasks run in parallel (per repo):
+
+```javascript
+// Modify MultiRepoOrchestrator to add concurrency control:
+class MultiRepoOrchestrator {
+  constructor(config = {}) {
+    this.maxConcurrentTasks = config.maxConcurrentTasks || 1; // Default: serial
+    this.activeTasks = new Map(); // repoName → count
+  }
+
+  async processNext() {
+    // Check concurrency cap before processing
+    for (const [repoName, factory] of this.factories) {
+      const activeCount = this.activeTasks.get(repoName) || 0;
+      if (activeCount < this.maxConcurrentTasks) {
+        // Process task for this repo
+      }
+    }
+  }
+}
+```
+
+## Architecture
+
+- **Phase 1**: Task intake + worktree isolation
+- **Phase 2**: Code execution (lint, test, commit)
+- **Phase 3**: Agent integration + autonomous loop
+- **Phase 4**: Result validation + feedback loop
+- **Phase 5**: Push/PR creation with Critic gate
+- **Phase 6**: Multi-repo orchestration + RedTeamFactory wrapper
+
+## Testing
+
 ```bash
-bash scripts/factory-run.sh --help
+npm test
 ```
 
-## Architecture (high level)
+All 3 test suites pass:
+- `test/integration.test.js` — Phases 1-5
+- `test/phase6.test.js` — Multi-repo orchestration
+- `test/redteam-factory.test.js` — Production integration
 
-```mermaid
-flowchart LR
-  A[Issue/Task] --> B[Planner/Orchestrator]
-  B --> C[Workspace Adapter\n(git worktree)]
-  C --> D[Runtime Adapter\n(process|tmux)]
-  D --> E[Coding Agent\n(Claude Code/Codex/etc.)]
-  E --> F[SCM Adapter\n(PR create/update)]
-  F --> G[CI]
-  G -->|ci_failed| H[Reaction: Fix CI]
-  F -->|changes_requested| I[Reaction: Address Review]
-  H --> F
-  I --> F
-  F -->|green + approved| J[Ready for merge]
-```
+## Safety Rails
 
-## Repo layout
-- `docs/` architecture, runbooks
-- `scripts/` runner scripts (worktrees, tmux, PR loop)
-- `ops/` task registry + metrics outputs
-- `integrations/` GitHub/Slack adapters (thin wrappers)
-
-## Status
-This repo is bootstrapped with CI and a minimal runner skeleton. Next: implement Phase-1 POC.
+- **Push/PR disabled by default** — explicitly enable in config
+- **Critic gate** — validates results before push/PR
+- **Force mode logging** — audit trail for overrides
+- **Dry-run mode** — test without side effects
