@@ -1,0 +1,39 @@
+name: coding-factory-pipeline
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show context
+        run: |
+          echo "repo=$GITHUB_REPOSITORY"
+          echo "ref=$GITHUB_REF"
+      - name: Shellcheck (scripts)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck -x scripts/*.sh
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Markdown sanity
+        run: |
+          python3 - <<'PY'
+import pathlib, sys
+bad=[]
+for p in pathlib.Path('.').rglob('*.md'):
+  t=p.read_text(errors='ignore')
+  if '\r\n' in t:
+    bad.append(str(p))
+if bad:
+  print('CRLF found in:', bad)
+  sys.exit(1)
+print('md ok')
+PY
