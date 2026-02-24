@@ -1,6 +1,6 @@
 /**
- * Coding Factory Orchestrator — Phase 1 + Phase 2 + Phase 3 + Phase 4
- * Coordinates task intake, worktree creation, agent execution, validation, and autonomous loop
+ * Coding Factory Orchestrator — Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5
+ * Coordinates task intake, worktree creation, agent execution, validation, push/PR, and autonomous loop
  */
 
 const TaskManager = require('./task-manager');
@@ -8,6 +8,8 @@ const WorktreeManager = require('./worktree-manager');
 const CodeExecutor = require('./code-executor');
 const AgentIntegration = require('./agent-integration');
 const ResultValidator = require('./result-validator');
+const CriticGate = require('./critic-gate');
+const PushPRManager = require('./push-pr-manager');
 const path = require('path');
 
 class CodingFactory {
@@ -17,12 +19,18 @@ class CodingFactory {
     this.worktreeRoot = config.worktreeRoot || './worktrees';
     this.validationMode = config.validationMode || 'default'; // 'default' or 'strict'
     this.enablePush = config.enablePush || false; // safety: disabled by default
+    this.createPR = config.createPR || false; // safety: disabled by default
 
     this.taskManager = new TaskManager(path.join(this.dataDir, 'task-queue.jsonl'));
     this.worktreeManager = new WorktreeManager(this.baseRepo, this.worktreeRoot);
     this.executor = new CodeExecutor(this.worktreeManager);
     this.agentIntegration = new AgentIntegration(this);
     this.validator = new ResultValidator(this.taskManager, this);
+    this.criticGate = new CriticGate(this.taskManager);
+    this.pushPRManager = new PushPRManager(this.worktreeManager, this.taskManager, {
+      enablePush: this.enablePush,
+      gitHubCliPath: config.gitHubCliPath || 'gh'
+    });
     
     this.isRunning = false;
   }
@@ -44,8 +52,9 @@ class CodingFactory {
    * Phase 2: execute code (lint, test, commit)
    * Phase 3: spawn agent for autonomous work
    * Phase 4: validate results and enqueue fixes if needed
+   * Phase 5: push/PR creation with Critic gate
    */
-  async processNext(useAgent = false) {
+  async processNext(useAgent = false, doPushPR = false) {
     const task = this.taskManager.next();
     if (!task) {
       console.log('[Factory] No tasks in queue');
@@ -108,14 +117,40 @@ class CodingFactory {
         };
       }
 
-      // Validation passed
+      // Phase 5: Push/PR creation (if requested and validation passed)
+      let pushPRResult = null;
+      if (doPushPR) {
+        try {
+          console.log(`[Factory] Creating push/PR for task ${task.id}...`);
+          pushPRResult = this.pushPRManager.createPushPR(task, {
+            forceMode: false,
+            createPR: this.createPR
+          });
+          console.log(`[Factory] Push/PR successful: ${pushPRResult.message}`);
+        } catch (error) {
+          console.error(`[Factory] Push/PR failed: ${error.message}`);
+          this.failTask(task.id, `Push/PR failed: ${error.message}`);
+          return {
+            taskId: task.id,
+            worktreeId: wt.id,
+            worktreePath: wt.path,
+            executionResult,
+            validationResult,
+            pushPRError: error.message,
+            failed: true
+          };
+        }
+      }
+
+      // Validation passed, push/PR successful (if attempted)
       this.completeTask(task.id, executionResult);
       return {
         taskId: task.id,
         worktreeId: wt.id,
         worktreePath: wt.path,
         executionResult,
-        validationResult
+        validationResult,
+        pushPRResult
       };
     } catch (error) {
       console.error(`[Factory] Error processing task ${task.id}:`, error.message);
@@ -128,17 +163,17 @@ class CodingFactory {
    * Start autonomous loop
    * Continuously processes tasks from queue
    */
-  async startAutonomousLoop(useAgent = false, intervalMs = 5000) {
+  async startAutonomousLoop(useAgent = false, doPushPR = false, intervalMs = 5000) {
     if (this.isRunning) {
       console.log('[Factory] Autonomous loop already running');
       return;
     }
 
     this.isRunning = true;
-    console.log(`[Factory] Starting autonomous loop (interval: ${intervalMs}ms, useAgent: ${useAgent}, validationMode: ${this.validationMode})`);
+    console.log(`[Factory] Starting autonomous loop (interval: ${intervalMs}ms, useAgent: ${useAgent}, doPushPR: ${doPushPR}, validationMode: ${this.validationMode})`);
 
     while (this.isRunning) {
-      const result = await this.processNext(useAgent);
+      const result = await this.processNext(useAgent, doPushPR);
       
       if (!result) {
         console.log('[Factory] Queue empty, waiting...');
@@ -202,7 +237,8 @@ class CodingFactory {
       worktrees: this.worktreeManager.list().length,
       isRunning: this.isRunning,
       validationMode: this.validationMode,
-      enablePush: this.enablePush
+      enablePush: this.enablePush,
+      createPR: this.createPR
     };
   }
 }
