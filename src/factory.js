@@ -1,10 +1,11 @@
 /**
- * Coding Factory Orchestrator — Phase 1 POC
- * Coordinates task intake, worktree creation, and execution
+ * Coding Factory Orchestrator — Phase 1 + Phase 2
+ * Coordinates task intake, worktree creation, code execution, and cleanup
  */
 
 const TaskManager = require('./task-manager');
 const WorktreeManager = require('./worktree-manager');
+const CodeExecutor = require('./code-executor');
 const path = require('path');
 
 class CodingFactory {
@@ -15,6 +16,7 @@ class CodingFactory {
 
     this.taskManager = new TaskManager(path.join(this.dataDir, 'task-queue.jsonl'));
     this.worktreeManager = new WorktreeManager(this.baseRepo, this.worktreeRoot);
+    this.executor = new CodeExecutor(this.worktreeManager);
   }
 
   /**
@@ -31,7 +33,7 @@ class CodingFactory {
   /**
    * Process next task in queue
    * Phase 1: create worktree, mark as in_progress
-   * (actual code execution comes in Phase 2)
+   * Phase 2: execute code (lint, test, commit)
    */
   async processNext() {
     const task = this.taskManager.next();
@@ -43,7 +45,7 @@ class CodingFactory {
     console.log(`[Factory] Processing task: ${task.id} — ${task.title}`);
 
     try {
-      // Create isolated worktree
+      // Phase 1: Create isolated worktree
       const wt = this.worktreeManager.create(task.id, task.branch || 'main');
       console.log(`[Factory] Created worktree: ${wt.id} at ${wt.path}`);
 
@@ -51,11 +53,28 @@ class CodingFactory {
       this.taskManager.start(task.id, wt.id);
       console.log(`[Factory] Task ${task.id} now in_progress`);
 
-      return {
-        taskId: task.id,
-        worktreeId: wt.id,
-        worktreePath: wt.path,
-      };
+      // Phase 2: Execute code inside worktree
+      console.log(`[Factory] Executing task ${task.id}...`);
+      const executionResult = await this.executor.execute(task);
+
+      if (executionResult.success) {
+        this.completeTask(task.id, executionResult);
+        return {
+          taskId: task.id,
+          worktreeId: wt.id,
+          worktreePath: wt.path,
+          executionResult
+        };
+      } else {
+        this.failTask(task.id, executionResult.errors.join('; '));
+        return {
+          taskId: task.id,
+          worktreeId: wt.id,
+          worktreePath: wt.path,
+          executionResult,
+          failed: true
+        };
+      }
     } catch (error) {
       console.error(`[Factory] Error processing task ${task.id}:`, error.message);
       this.taskManager.fail(task.id, error.message);
