@@ -4,7 +4,7 @@
   "description": "Autonomous coding factory with multi-repo orchestration",
   "main": "src/factory.js",
   "scripts": {
-    "test": "node test/integration.test.js && node test/phase6.test.js && node test/redteam-factory.test.js"
+    "test": "node test/integration.test.js && node test/phase6.test.js && node test/redteam-factory.test.js && node test/self-healing-ci.test.js"
   },
   "dependencies": {
     "uuid": "^13.0.0"

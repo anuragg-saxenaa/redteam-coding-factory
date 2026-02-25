@@ -10,6 +10,7 @@ const AgentIntegration = require('./agent-integration');
 const ResultValidator = require('./result-validator');
 const CriticGate = require('./critic-gate');
 const PushPRManager = require('./push-pr-manager');
+const MetricsWriter = require('./metrics-writer');
 const path = require('path');
 
 class CodingFactory {
@@ -23,13 +24,19 @@ class CodingFactory {
 
     this.taskManager = new TaskManager(path.join(this.dataDir, 'task-queue.jsonl'));
     this.worktreeManager = new WorktreeManager(this.baseRepo, this.worktreeRoot);
-    this.executor = new CodeExecutor(this.worktreeManager);
+    this.executor = new CodeExecutor(this.worktreeManager, {
+      maxRetries:  config.maxRetries  || 3,
+      baseDelayMs: config.baseDelayMs || 200,
+    });
     this.agentIntegration = new AgentIntegration(this);
     this.validator = new ResultValidator(this.taskManager, this);
     this.criticGate = new CriticGate(this.taskManager);
     this.pushPRManager = new PushPRManager(this.worktreeManager, this.taskManager, {
       enablePush: this.enablePush,
       gitHubCliPath: config.gitHubCliPath || 'gh'
+    });
+    this.metrics = new MetricsWriter({
+      metricsPath: config.metricsPath || path.join(__dirname, '..', 'ops', 'metrics.json'),
     });
     
     this.isRunning = false;
@@ -193,7 +200,7 @@ class CodingFactory {
   }
 
   /**
-   * Complete a task
+   * Complete a task and record metrics
    */
   completeTask(taskId, result) {
     this.taskManager.complete(taskId, result);
@@ -202,11 +209,28 @@ class CodingFactory {
       this.worktreeManager.remove(task.worktreeId);
       console.log(`[Factory] Cleaned up worktree: ${task.worktreeId}`);
     }
+    // Record metrics
+    try {
+      this.metrics.record({
+        task,
+        startTime: task?.startedAt || task?.createdAt || new Date(),
+        endTime:   new Date(),
+        passed:    true,
+        attempts:  result?.healingReport
+          ? Math.max(...Object.values(result.healingReport).filter(Number.isFinite), 1)
+          : 1,
+        stages:    result?.steps
+          ? Object.fromEntries((result.steps || []).map(s => [s.name, { success: s.success, attempts: s.attempts }]))
+          : {},
+      });
+    } catch (e) {
+      console.warn(`[Factory] Metrics record error: ${e.message}`);
+    }
     console.log(`[Factory] Task ${taskId} completed`);
   }
 
   /**
-   * Fail a task
+   * Fail a task and record metrics
    */
   failTask(taskId, error) {
     this.taskManager.fail(taskId, error);
@@ -214,6 +238,18 @@ class CodingFactory {
     if (task && task.worktreeId) {
       this.worktreeManager.remove(task.worktreeId);
       console.log(`[Factory] Cleaned up worktree: ${task.worktreeId}`);
+    }
+    // Record metrics
+    try {
+      this.metrics.record({
+        task: task || { id: taskId, title: '(unknown)', repo: 'unknown', branch: 'main' },
+        startTime: task?.startedAt || task?.createdAt || new Date(),
+        endTime:   new Date(),
+        passed:    false,
+        error,
+      });
+    } catch (e) {
+      console.warn(`[Factory] Metrics record error: ${e.message}`);
     }
     console.log(`[Factory] Task ${taskId} failed: ${error}`);
   }
