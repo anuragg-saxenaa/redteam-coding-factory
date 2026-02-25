@@ -1,0 +1,10 @@
+node_modules/
+# Factory runtime state (should not be committed)
+.factory-data/
+.factory-data-*/
+data/
+worktrees/
+.worktrees/
+
+# OS
+.DS_Store

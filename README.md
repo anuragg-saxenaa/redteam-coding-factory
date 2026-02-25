@@ -4,6 +4,24 @@ Autonomous coding factory with multi-repo orchestration. Phases 1-6 complete and
 
 ## Quick Start
 
+### CLI (Recommended for Production)
+
+```bash
+# Install globally or use npx
+npm install -g redteam-coding-factory
+
+# Run with config file
+redteam-factory run --config factory.config.json
+
+# Run with config + custom tasks
+redteam-factory run --config factory.config.json --tasks tasks.json
+
+# Show help
+redteam-factory --help
+```
+
+### Programmatic (Node.js)
+
 ```javascript
 const RedTeamFactory = require('./src/redteam-factory');
 
@@ -87,6 +105,8 @@ class MultiRepoOrchestrator {
 ```bash
 npm test
 ```
+
+Metrics are written to `dataDir/metrics.json` (runtime state) so test runs don’t dirty the git repo.
 
 All 3 test suites pass:
 - `test/integration.test.js` — Phases 1-5

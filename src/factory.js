@@ -35,8 +35,10 @@ class CodingFactory {
       enablePush: this.enablePush,
       gitHubCliPath: config.gitHubCliPath || 'gh'
     });
+    // Metrics should default to the factory's dataDir (runtime state), not the git repo.
+    // This keeps tests and local runs from dirtying the repository.
     this.metrics = new MetricsWriter({
-      metricsPath: config.metricsPath || path.join(__dirname, '..', 'ops', 'metrics.json'),
+      metricsPath: config.metricsPath || path.join(this.dataDir, 'metrics.json'),
     });
     
     this.isRunning = false;

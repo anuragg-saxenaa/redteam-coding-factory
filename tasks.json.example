@@ -1,0 +1,41 @@
+[
+  {
+    "id": "task-001",
+    "title": "Fix critical bug in auth module",
+    "description": "Session tokens expiring prematurely. Root cause: TTL calculation off by 1 hour.",
+    "repo": "core",
+    "branch": "main",
+    "priority": "P1",
+    "context": {
+      "errorLogs": ["Session expired after 59 minutes instead of 60"],
+      "affectedFiles": ["src/auth/session-manager.js"],
+      "testCommand": "npm test -- auth.test.js"
+    }
+  },
+  {
+    "id": "task-002",
+    "title": "Refactor API response serialization",
+    "description": "Current JSON serializer is slow for large payloads. Implement streaming response.",
+    "repo": "api",
+    "branch": "main",
+    "priority": "P2",
+    "context": {
+      "performanceMetric": "p95 latency > 2s for 10MB payloads",
+      "affectedFiles": ["src/serializers/json-serializer.js"],
+      "testCommand": "npm test -- serializer.test.js"
+    }
+  },
+  {
+    "id": "task-003",
+    "title": "Add dark mode toggle to dashboard",
+    "description": "User feature request. Add CSS variables + localStorage persistence.",
+    "repo": "web",
+    "branch": "main",
+    "priority": "P3",
+    "context": {
+      "userStories": ["As a user, I want to toggle dark mode and have it persist"],
+      "affectedFiles": ["src/components/Dashboard.jsx", "src/styles/theme.css"],
+      "testCommand": "npm test -- dashboard.test.js"
+    }
+  }
+]
