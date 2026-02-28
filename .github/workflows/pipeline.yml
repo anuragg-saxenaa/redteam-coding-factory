@@ -2,11 +2,20 @@ name: coding-factory-pipeline
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
+  workflow_governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - run: bash scripts/check-workflow-governance.sh
+
   lint_shell:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
       - run: shellcheck -x scripts/*.sh
 
@@ -16,8 +25,8 @@ jobs:
       matrix:
         node-version: [20, 22]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
@@ -26,8 +35,8 @@ jobs:
   factory:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20
       - run: npm ci
@@ -64,8 +73,5 @@ jobs:
             }
           }
           EOF
-      - name: Run factory
-        run: npx redteam-factory run --config factory.config.json
-
       - name: Run factory
         run: node cli-entrypoint.js run --config factory.config.json --tasks tasks.json

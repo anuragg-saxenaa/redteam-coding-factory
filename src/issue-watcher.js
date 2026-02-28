@@ -46,6 +46,8 @@ class IssueWatcher {
     this.branch = config.branch || 'main';
     this.pollIntervalMs = config.pollIntervalMs || 60000;
     this.maxConcurrent = config.maxConcurrent || 1;
+    this.enableAutoRemediation = config.enableAutoRemediation ?? false;
+    this.maxRetryBudget = config.maxRetryBudget ?? 6;
     this.enablePush = config.enablePush || false;
     this.createPR = config.createPR || false;
     this.autoClose = config.autoClose || false;
@@ -81,6 +83,9 @@ class IssueWatcher {
       enablePush: this.enablePush,
       createPR: this.createPR,
       maxRetries: config.maxRetries || 3,
+      enableAutoRemediation: this.enableAutoRemediation,
+      maxRetryBudget: this.maxRetryBudget,
+      maxRemediationAttempts: config.maxRemediationAttempts || 1,
     });
   }
 
@@ -104,6 +109,7 @@ class IssueWatcher {
     this._running = true;
     console.log(`[IssueWatcher] Starting daemon — repo: ${this.repo}, poll: ${this.pollIntervalMs}ms, agent: ${this.agentName}`);
     console.log(`[IssueWatcher] Push: ${this.enablePush}, PR: ${this.createPR}, AutoClose: ${this.autoClose}`);
+    console.log(`[IssueWatcher] Remediation: ${this.enableAutoRemediation}, RetryBudget: ${this.maxRetryBudget}`);
 
     // First poll immediately
     this._poll();
@@ -224,15 +230,18 @@ class IssueWatcher {
         this._stats.completed++;
         console.log(`[IssueWatcher] ✓ Issue #${issueNumber} completed in ${durationStr}`);
 
+        const remediationSummary = this._formatRemediationSummary(result.executionResult);
         const successMsg = [
           `✅ **Factory completed this task** (${durationStr})`,
           '',
           result.pushPRResult?.prUrl
             ? `PR: ${result.pushPRResult.prUrl}`
             : 'Changes committed locally (push/PR not enabled)',
+          remediationSummary ? '' : null,
+          remediationSummary || null,
           '',
           `Task ID: \`${result.taskId}\``,
-        ].join('\n');
+        ].filter(Boolean).join('\n');
 
         this.intake.commentOnIssue(issueNumber, successMsg);
 
@@ -255,9 +264,18 @@ class IssueWatcher {
 
         console.log(`[IssueWatcher] ✗ Issue #${issueNumber} failed: ${errorMsg}`);
 
+        const remediationSummary = this._formatRemediationSummary(result?.executionResult);
         this.intake.commentOnIssue(
           issueNumber,
-          `❌ **Factory failed on this task** (${durationStr})\n\nError: ${errorMsg}\n\nTask ID: \`${result?.taskId || 'N/A'}\``
+          [
+            `❌ **Factory failed on this task** (${durationStr})`,
+            '',
+            `Error: ${errorMsg}`,
+            remediationSummary ? '' : null,
+            remediationSummary || null,
+            '',
+            `Task ID: \`${result?.taskId || 'N/A'}\``,
+          ].filter(Boolean).join('\n')
         );
 
         // Remove in-progress label on failure so it can be retried
@@ -304,6 +322,26 @@ class IssueWatcher {
     } catch (_) {
       // best-effort
     }
+  }
+
+  _formatRemediationSummary(executionResult) {
+    const details = executionResult?.healingDetails;
+    if (!details) return '';
+
+    const remediations = Array.isArray(details.remediations) ? details.remediations.length : 0;
+    const escalations = Array.isArray(details.escalations) ? details.escalations.length : 0;
+    const budget = details.budget || null;
+
+    const parts = [];
+    if (budget && Number.isFinite(budget.used) && Number.isFinite(budget.max)) {
+      parts.push(`retry budget ${budget.used}/${budget.max}`);
+    }
+    parts.push(`${remediations} remediation attempt(s)`);
+    if (escalations > 0) {
+      parts.push(`${escalations} escalation event(s)`);
+    }
+
+    return parts.length ? `Self-healing: ${parts.join(', ')}` : '';
   }
 
   /**

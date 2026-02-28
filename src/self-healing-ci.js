@@ -1,14 +1,11 @@
 /**
- * Self-Healing CI — TICKET-2026-02-24-01
+ * Self-Healing CI — TICKET-2026-02-24-01 + TICKET-2026-02-25-02
  *
  * Implements:
  *  - Stage-level retries with exponential back-off
  *  - Failure classification (transient vs permanent)
- *  - Capped retry loop (max 3 attempts per stage)
- *  - Structured remediation hints per failure class
- *
- * Designed to wrap CodeExecutor stages so the factory can
- * self-heal before escalating to a human reviewer.
+ *  - Guarded auto-remediation with scoped fix plans
+ *  - Capped retry budget and explicit human escalation payloads
  */
 
 const FAILURE_CLASSES = {
@@ -18,7 +15,7 @@ const FAILURE_CLASSES = {
   LOCK_CONTENTION:  { transient: true,  hint: 'Another process holds a lock; wait and retry' },
   TIMEOUT:          { transient: true,  hint: 'Stage timed out; retry with extended timeout' },
 
-  // Permanent — requires code change, escalate after 1 attempt
+  // Permanent — requires code change, escalate after a bounded fix cycle
   LINT_ERROR:       { transient: false, hint: 'Fix lint violations before re-running' },
   TYPE_ERROR:       { transient: false, hint: 'Fix type errors; check type annotations' },
   TEST_FAILURE:     { transient: false, hint: 'Fix failing assertions; check business logic' },
@@ -30,8 +27,10 @@ const FAILURE_CLASSES = {
 };
 
 const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_MAX_RETRY_BUDGET = 6;
+const DEFAULT_MAX_REMEDIATION_ATTEMPTS = 1;
 const TRANSIENT_MAX_RETRIES = 3;
-const PERMANENT_MAX_RETRIES = 1; // attempt once more after a code-fix cycle
+const PERMANENT_MAX_RETRIES = 1;
 
 /**
  * Classify a stage failure from its error message / output.
@@ -53,36 +52,130 @@ function classifyFailure(error = '', output = '') {
   return 'UNKNOWN';
 }
 
+function defaultRemediationScope(classification) {
+  switch (classification) {
+    case 'LINT_ERROR':
+      return { type: 'lint-only', files: ['**/*.{js,ts,tsx,jsx}'], risk: 'low' };
+    case 'TYPE_ERROR':
+      return { type: 'type-system', files: ['**/*.{ts,tsx,d.ts}'], risk: 'medium' };
+    case 'TEST_FAILURE':
+      return { type: 'test-targeted', files: ['test/**/*', 'src/**/*'], risk: 'medium' };
+    case 'BUILD_ERROR':
+      return { type: 'build-targeted', files: ['src/**/*', 'package.json'], risk: 'medium' };
+    case 'DEPENDENCY_ERROR':
+      return { type: 'dependency', files: ['package.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'], risk: 'medium' };
+    default:
+      return { type: 'minimal', files: [], risk: 'high' };
+  }
+}
+
 /**
  * SelfHealingCI
  *
  * Wraps an async stage function and retries it according to the
- * failure class, up to maxRetries.  Returns a structured result
- * so the caller can log, escalate, or apply a code fix.
+ * failure class, with a global retry budget and optional remediation hook.
  */
 class SelfHealingCI {
   constructor(options = {}) {
-    this.maxRetries       = options.maxRetries       ?? DEFAULT_MAX_RETRIES;
-    this.baseDelayMs      = options.baseDelayMs      ?? 500;   // initial back-off
-    this.maxDelayMs       = options.maxDelayMs       ?? 8000;  // ceiling
-    this.onRetry          = options.onRetry          || null;  // (attempt, classification, hint) => void
-    this.onEscalate       = options.onEscalate       || null;  // (stageName, finalResult) => void
-    this._attempts        = {};                                // stageName → attempt count
+    this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+    this.maxRetryBudget = options.maxRetryBudget ?? DEFAULT_MAX_RETRY_BUDGET;
+    this.maxRemediationAttempts = options.maxRemediationAttempts ?? DEFAULT_MAX_REMEDIATION_ATTEMPTS;
+    this.baseDelayMs = options.baseDelayMs ?? 500;
+    this.maxDelayMs = options.maxDelayMs ?? 8000;
+    this.onRetry = options.onRetry || null;
+    this.onEscalate = options.onEscalate || null;
+
+    this.enableAutoRemediation = options.enableAutoRemediation ?? false;
+    this.remediationGenerator = options.remediationGenerator || null;
+    this.remediationExecutor = options.remediationExecutor || null;
+    this.onRemediation = options.onRemediation || null;
+
+    this._attempts = {}; // stageName -> attempt count
+    this._retryBudgetUsed = 0;
+    this._remediationHistory = [];
+    this._escalations = [];
   }
 
-  /**
-   * Run a stage with self-healing retries.
-   *
-   * @param {string}   stageName  - human label (e.g. 'lint', 'test')
-   * @param {Function} stageFn    - async () => { success, error?, output? }
-   * @returns {Object}            - { success, attempts, classification, hint, history }
-   */
+  _canSpendBudget() {
+    return this._retryBudgetUsed < this.maxRetryBudget;
+  }
+
+  _spendBudget() {
+    this._retryBudgetUsed++;
+  }
+
+  _shouldAttemptRemediation(classification, attempt, remediationAttempts) {
+    if (!this.enableAutoRemediation) return false;
+    if (!this.remediationGenerator || !this.remediationExecutor) return false;
+    if (remediationAttempts >= this.maxRemediationAttempts) return false;
+    if (classification === 'UNKNOWN' && attempt > 1) return false;
+    return ['LINT_ERROR', 'TYPE_ERROR', 'TEST_FAILURE', 'BUILD_ERROR', 'DEPENDENCY_ERROR', 'UNKNOWN'].includes(classification);
+  }
+
+  _buildRemediationPlan(stageName, classification, result, attempt) {
+    const basePlan = {
+      stageName,
+      classification,
+      scope: defaultRemediationScope(classification),
+      hint: FAILURE_CLASSES[classification]?.hint || FAILURE_CLASSES.UNKNOWN.hint,
+      attempt,
+      error: result?.error || '',
+      output: result?.output || '',
+      createdAt: new Date().toISOString(),
+    };
+
+    const customPlan = this.remediationGenerator(stageName, classification, result, attempt, {
+      budget: { used: this._retryBudgetUsed, max: this.maxRetryBudget },
+      scope: basePlan.scope,
+      hint: basePlan.hint,
+    }) || {};
+
+    return {
+      ...basePlan,
+      ...customPlan,
+      scope: customPlan.scope || basePlan.scope,
+    };
+  }
+
+  _recordEscalation(escalation) {
+    this._escalations.push(escalation);
+    if (this.onEscalate) {
+      try {
+        this.onEscalate(escalation.stageName, escalation);
+      } catch (_) {
+        // ignore callback failures
+      }
+    }
+  }
+
   async runStage(stageName, stageFn) {
     this._attempts[stageName] = 0;
+    let remediationAttempts = 0;
+    let lastClassification = 'UNKNOWN';
+    let lastResult = { success: false, error: 'no execution', output: '' };
     const history = [];
 
     while (true) {
+      if (!this._canSpendBudget()) {
+        const budgetEscalation = {
+          success: false,
+          stageName,
+          reason: 'retry_budget_exhausted',
+          attempts: this._attempts[stageName],
+          classification: lastClassification,
+          hint: FAILURE_CLASSES[lastClassification]?.hint || FAILURE_CLASSES.UNKNOWN.hint,
+          transient: FAILURE_CLASSES[lastClassification]?.transient ?? true,
+          lastError: lastResult?.error || 'unknown',
+          history,
+          budget: { used: this._retryBudgetUsed, max: this.maxRetryBudget },
+          needsHuman: true,
+        };
+        this._recordEscalation(budgetEscalation);
+        return budgetEscalation;
+      }
+
       this._attempts[stageName]++;
+      this._spendBudget();
       const attempt = this._attempts[stageName];
 
       let result;
@@ -93,65 +186,108 @@ class SelfHealingCI {
       }
 
       const passed = result && result.success === true;
+      lastResult = result;
 
       history.push({
+        type: 'stage',
         attempt,
         success: passed,
-        error:   result?.error  || null,
-        output:  result?.output || null,
-        ts:      new Date().toISOString(),
+        error: result?.error || null,
+        output: result?.output || null,
+        ts: new Date().toISOString(),
       });
 
       if (passed) {
-        console.log(`[SelfHealingCI] ✓ Stage "${stageName}" passed on attempt ${attempt}`);
-        return { success: true, attempts: attempt, history };
+        return {
+          success: true,
+          attempts: attempt,
+          history,
+          budget: { used: this._retryBudgetUsed, max: this.maxRetryBudget },
+          remediationAttempts,
+        };
       }
 
-      // Classify the failure
       const classification = classifyFailure(result?.error || '', result?.output || '');
+      lastClassification = classification;
       const meta = FAILURE_CLASSES[classification];
       const maxForClass = meta.transient ? TRANSIENT_MAX_RETRIES : PERMANENT_MAX_RETRIES;
-      const effective   = Math.min(this.maxRetries, maxForClass);
-
-      console.log(`[SelfHealingCI] ✗ Stage "${stageName}" attempt ${attempt}/${effective} — class: ${classification} — ${meta.hint}`);
+      const effectiveRetries = Math.min(this.maxRetries, maxForClass);
 
       if (this.onRetry) {
-        try { this.onRetry(attempt, classification, meta.hint, stageName); } catch (_) {}
+        try {
+          this.onRetry(attempt, classification, meta.hint, stageName);
+        } catch (_) {
+          // ignore callback failures
+        }
       }
 
-      if (attempt >= effective) {
-        console.log(`[SelfHealingCI] ⚠ Stage "${stageName}" exhausted retries — escalating`);
-        const finalResult = {
-          success:        false,
-          attempts:       attempt,
-          classification,
-          hint:           meta.hint,
-          transient:      meta.transient,
-          lastError:      result?.error || 'unknown',
-          history,
-        };
+      let remediationApplied = false;
+      if (this._shouldAttemptRemediation(classification, attempt, remediationAttempts)) {
+        const plan = this._buildRemediationPlan(stageName, classification, result, attempt);
+        remediationAttempts++;
 
-        if (this.onEscalate) {
-          try { this.onEscalate(stageName, finalResult); } catch (_) {}
+        let remediationResult;
+        try {
+          remediationResult = await this.remediationExecutor(plan);
+        } catch (err) {
+          remediationResult = { success: false, error: err.message, output: '' };
         }
 
-        return finalResult;
+        const remediationEvent = {
+          stageName,
+          attempt,
+          remediationAttempt: remediationAttempts,
+          classification,
+          scope: plan.scope,
+          commands: plan.commands || [],
+          success: remediationResult?.success === true,
+          error: remediationResult?.error || null,
+          output: remediationResult?.output || null,
+          ts: new Date().toISOString(),
+        };
+
+        remediationApplied = remediationEvent.success;
+        this._remediationHistory.push(remediationEvent);
+        history.push({ type: 'remediation', ...remediationEvent });
+
+        if (this.onRemediation) {
+          try {
+            this.onRemediation(plan, remediationResult, stageName);
+          } catch (_) {
+            // ignore callback failures
+          }
+        }
       }
 
-      // Exponential back-off before retry
+      // If a remediation step applied cleanly, allow one immediate verification run.
+      if (remediationApplied) {
+        continue;
+      }
+
+      if (attempt >= effectiveRetries) {
+        const finalEscalation = {
+          success: false,
+          stageName,
+          reason: 'stage_retries_exhausted',
+          attempts: attempt,
+          classification,
+          hint: meta.hint,
+          transient: meta.transient,
+          lastError: result?.error || 'unknown',
+          history,
+          budget: { used: this._retryBudgetUsed, max: this.maxRetryBudget },
+          remediationAttempts,
+          needsHuman: true,
+        };
+        this._recordEscalation(finalEscalation);
+        return finalEscalation;
+      }
+
       const delay = Math.min(this.baseDelayMs * Math.pow(2, attempt - 1), this.maxDelayMs);
-      console.log(`[SelfHealingCI] ↻ Retrying "${stageName}" in ${delay}ms...`);
-      await new Promise(r => setTimeout(r, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
-  /**
-   * Run multiple stages in sequence.
-   * Stops on first unrecoverable failure.
-   *
-   * @param {Array} stages - [{ name, fn }]
-   * @returns {Object} - { passed, failed, results }
-   */
   async runPipeline(stages) {
     const results = {};
     let allPassed = true;
@@ -162,7 +298,6 @@ class SelfHealingCI {
 
       if (!result.success) {
         allPassed = false;
-        console.log(`[SelfHealingCI] Pipeline halted after "${name}" failure`);
         break;
       }
     }
@@ -170,18 +305,24 @@ class SelfHealingCI {
     return { passed: allPassed, results };
   }
 
-  /**
-   * Reset attempt counters (use between independent task runs)
-   */
   reset() {
     this._attempts = {};
+    this._retryBudgetUsed = 0;
+    this._remediationHistory = [];
+    this._escalations = [];
   }
 
-  /**
-   * Return a summary of all stage attempts
-   */
   summary() {
     return { ...this._attempts };
+  }
+
+  report() {
+    return {
+      attempts: { ...this._attempts },
+      budget: { used: this._retryBudgetUsed, max: this.maxRetryBudget },
+      remediations: [...this._remediationHistory],
+      escalations: [...this._escalations],
+    };
   }
 }
 

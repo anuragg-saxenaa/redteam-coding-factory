@@ -110,6 +110,59 @@ console.log('\nTest 2: stage passes first attempt');
   assert(summary.includes('✅'),        'slack summary has green checkmark');
   assert(summary.includes('❌'),        'slack summary has red cross');
 
+
+// ─── Test 8: guarded remediation executes and reports ───────────────────────
+  console.log('\nTest 8: guarded remediation runs once and records details');
+  let remediationCalled = 0;
+  const healer6 = new SelfHealingCI({
+    baseDelayMs: 0,
+    maxRetries: 2,
+    maxRetryBudget: 4,
+    enableAutoRemediation: true,
+    remediationGenerator: (stageName, classification) => ({
+      stageName,
+      classification,
+      scope: { type: 'lint-only', files: ['src/**/*.js'], risk: 'low' },
+      commands: ['npm run lint -- --fix'],
+    }),
+    remediationExecutor: async () => {
+      remediationCalled++;
+      return { success: true, output: 'fixed lint' };
+    },
+  });
+
+  let first = true;
+  const result6 = await healer6.runStage('lint', async () => {
+    if (first) {
+      first = false;
+      return { success: false, error: 'eslint no-unused-vars', output: '' };
+    }
+    return { success: true };
+  });
+
+  const report6 = healer6.report();
+  assert(result6.success === true, 'stage succeeds after remediation');
+  assert(remediationCalled === 1, 'remediation executed once');
+  assert(Array.isArray(report6.remediations) && report6.remediations.length === 1, 'one remediation event recorded');
+
+// ─── Test 9: retry budget exhaustion escalates ──────────────────────────────
+  console.log('\nTest 9: retry budget exhaustion triggers escalation');
+  const healer7 = new SelfHealingCI({
+    baseDelayMs: 0,
+    maxRetries: 5,
+    maxRetryBudget: 1,
+  });
+
+  const result7 = await healer7.runStage('test', async () => ({
+    success: false,
+    error: 'ECONNREFUSED',
+    output: '',
+  }));
+
+  assert(result7.success === false, 'stage fails under constrained budget');
+  assert(result7.reason === 'stage_retries_exhausted' || result7.reason === 'retry_budget_exhausted', 'failure reason captured');
+  assert(result7.budget && result7.budget.max === 1, 'budget metadata is returned');
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
   console.log(`\n=== Self-Healing CI Tests: ${passed} passed, ${failed} failed ===\n`);
   if (failed > 0) {

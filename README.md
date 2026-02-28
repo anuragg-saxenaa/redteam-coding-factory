@@ -146,6 +146,15 @@ All 3 test suites pass:
 - `test/phase6.test.js` — Multi-repo orchestration
 - `test/redteam-factory.test.js` — Production integration
 
+## Benchmark Policy
+
+SWE-bench Verified is the canonical capability metric for this factory.
+
+- Policy: [docs/BENCHMARK-POLICY.md](./docs/BENCHMARK-POLICY.md)
+- Standard report template: [ops/templates/swe-bench-verified-report.md](./ops/templates/swe-bench-verified-report.md)
+
+Runtime metrics (`dataDir/metrics.json`) are operational health signals, not benchmark scorecards.
+
 ## Safety Rails
 
 - **Push/PR disabled by default** — explicitly enable in config

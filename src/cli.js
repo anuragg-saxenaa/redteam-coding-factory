@@ -47,6 +47,8 @@ function usage(exitCode = 0) {
     '  --push       Enable git push (watch mode; default: false)',
     '  --pr         Enable PR creation (watch mode; default: false)',
     '  --auto-close Auto-close issues on success (watch mode; default: false)',
+    '  --remediate  Enable guarded auto-remediation (watch mode; default: false)',
+    '  --retry-budget Max retry budget across stages (watch mode; default: 6)',
     '  --help       Show this help',
     '',
   ].join('\n');
@@ -67,6 +69,8 @@ function parseArgs(argv) {
     else if (a === '--push') args.push = true;
     else if (a === '--pr') args.pr = true;
     else if (a === '--auto-close') args.autoClose = true;
+    else if (a === '--remediate') args.remediate = true;
+    else if (a === '--retry-budget') args.retryBudget = parseInt(argv[++i], 10);
     else args._.push(a);
   }
   return args;
@@ -123,6 +127,8 @@ async function main() {
       autoClose: args.autoClose || config.github.autoClose || false,
       dataDir: config.dataDir,
       maxRetries: config.maxRetries || 3,
+      enableAutoRemediation: args.remediate || config.enableAutoRemediation || false,
+      maxRetryBudget: args.retryBudget || config.maxRetryBudget || 6,
       onPoll: (count) => {
         if (count > 0) console.log(`[CLI] Found ${count} issues`);
       },

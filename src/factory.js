@@ -21,12 +21,20 @@ class CodingFactory {
     this.validationMode = config.validationMode || 'default'; // 'default' or 'strict'
     this.enablePush = config.enablePush || false; // safety: disabled by default
     this.createPR = config.createPR || false; // safety: disabled by default
+    this.enableAutoRemediation = config.enableAutoRemediation ?? false;
+    this.maxRetryBudget = config.maxRetryBudget ?? 6;
+    this.maxRemediationAttempts = config.maxRemediationAttempts ?? 1;
 
     this.taskManager = new TaskManager(path.join(this.dataDir, 'task-queue.jsonl'));
     this.worktreeManager = new WorktreeManager(this.baseRepo, this.worktreeRoot);
     this.executor = new CodeExecutor(this.worktreeManager, {
-      maxRetries:  config.maxRetries  || 3,
-      baseDelayMs: config.baseDelayMs || 200,
+      maxRetries: config.maxRetries ?? 3,
+      maxRetryBudget: config.maxRetryBudget ?? 6,
+      maxRemediationAttempts: config.maxRemediationAttempts ?? 1,
+      enableAutoRemediation: config.enableAutoRemediation ?? false,
+      remediationGenerator: config.remediationGenerator || null,
+      remediationExecutor: config.remediationExecutor || null,
+      baseDelayMs: config.baseDelayMs ?? 200,
     });
     this.agentIntegration = new AgentIntegration(this);
     this.validator = new ResultValidator(this.taskManager, this);
@@ -276,7 +284,10 @@ class CodingFactory {
       isRunning: this.isRunning,
       validationMode: this.validationMode,
       enablePush: this.enablePush,
-      createPR: this.createPR
+      createPR: this.createPR,
+      enableAutoRemediation: this.enableAutoRemediation,
+      maxRetryBudget: this.maxRetryBudget,
+      maxRemediationAttempts: this.maxRemediationAttempts
     };
   }
 }

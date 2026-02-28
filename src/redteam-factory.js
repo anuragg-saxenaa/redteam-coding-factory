@@ -14,6 +14,10 @@ class RedTeamFactory {
       dataDir: config.dataDir || '/Users/redinside/Development/Codebase/projects/RedTeam/.factory-data',
       enablePush: config.enablePush || false,
       createPR: config.createPR || false,
+      enableAutoRemediation: config.enableAutoRemediation ?? false,
+      maxRetryBudget: config.maxRetryBudget ?? 6,
+      maxRemediationAttempts: config.maxRemediationAttempts ?? 1,
+      maxRetries: config.maxRetries ?? 3,
       ...config
     };
 
@@ -34,7 +38,13 @@ class RedTeamFactory {
         path: r.path,
         branch: r.branch || 'main'
       })),
-      dataDir: this.config.dataDir
+      dataDir: this.config.dataDir,
+      maxRetries: this.config.maxRetries,
+      maxRetryBudget: this.config.maxRetryBudget,
+      enableAutoRemediation: this.config.enableAutoRemediation,
+      maxRemediationAttempts: this.config.maxRemediationAttempts,
+      baseDelayMs: this.config.baseDelayMs,
+      maxDelayMs: this.config.maxDelayMs,
     };
 
     this.orchestrator = new MultiRepoOrchestrator(orchestratorConfig);

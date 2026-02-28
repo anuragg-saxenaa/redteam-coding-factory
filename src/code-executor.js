@@ -1,7 +1,8 @@
 /**
- * Code Executor — Phase 2 POC + Self-Healing CI (TICKET-2026-02-24-01)
+ * Code Executor — Phase 2 POC + Self-Healing CI
+ * (TICKET-2026-02-24-01 + TICKET-2026-02-25-02)
  * Executes code (lint, test, commit) inside isolated worktrees.
- * Each stage is wrapped with SelfHealingCI for automatic retry on transient failures.
+ * Each stage is wrapped with guarded SelfHealingCI retries and scoped remediation.
  */
 
 const fs = require('fs');
@@ -14,16 +15,86 @@ class CodeExecutor {
     this.worktreeManager = worktreeManager;
     // SelfHealingCI instance — shared across stage runs within one execute() call
     this._healingOptions = {
-      maxRetries:  options.maxRetries  ?? 3,
+      maxRetries: options.maxRetries ?? 3,
+      maxRetryBudget: options.maxRetryBudget ?? 6,
+      maxRemediationAttempts: options.maxRemediationAttempts ?? 1,
+      enableAutoRemediation: options.enableAutoRemediation ?? false,
+      remediationGenerator: options.remediationGenerator || null,
+      remediationExecutor: options.remediationExecutor || null,
       baseDelayMs: options.baseDelayMs ?? 200,  // faster in tests; production: 500+
-      maxDelayMs:  options.maxDelayMs  ?? 4000,
+      maxDelayMs: options.maxDelayMs ?? 4000,
       onRetry: (attempt, classification, hint, stageName) => {
         console.log(`[Executor][SelfHeal] Stage "${stageName}" retry #${attempt} — ${classification}: ${hint}`);
       },
+      onRemediation: (plan, remediationResult, stageName) => {
+        const verdict = remediationResult?.success ? 'succeeded' : 'failed';
+        console.log(`[Executor][SelfHeal] Remediation ${verdict} for "${stageName}" (${plan.classification}) scope=${plan.scope?.type || 'unknown'}`);
+      },
       onEscalate: (stageName, result) => {
-        console.warn(`[Executor][SelfHeal] Stage "${stageName}" escalated after ${result.attempts} attempts — ${result.classification}`);
+        console.warn(`[Executor][SelfHeal] Stage "${stageName}" escalated after ${result.attempts} attempts — ${result.classification} (${result.reason || 'unknown'})`);
       },
     };
+  }
+
+
+  _buildDefaultRemediationPlan(stageName, classification, result, attempt, context) {
+    const scope = context.scope || { type: 'minimal', files: [], risk: 'high' };
+    const commands = [];
+
+    if (classification === 'LINT_ERROR') {
+      commands.push('npm run lint -- --fix');
+    } else if (classification === 'TYPE_ERROR') {
+      commands.push('npm run typecheck');
+    } else if (classification === 'TEST_FAILURE') {
+      commands.push('npm test -- --run');
+    } else if (classification === 'BUILD_ERROR') {
+      commands.push('npm run build');
+    } else if (classification === 'DEPENDENCY_ERROR') {
+      commands.push('npm install --package-lock-only');
+    }
+
+    return {
+      stageName,
+      classification,
+      attempt,
+      hint: context.hint,
+      scope,
+      commands,
+      error: result?.error || '',
+      output: result?.output || '',
+      generatedBy: 'code-executor-default',
+    };
+  }
+
+  async _runRemediationPlan(worktreePath, plan) {
+    if (!plan || !Array.isArray(plan.commands) || plan.commands.length === 0) {
+      return {
+        success: false,
+        error: 'No remediation commands generated',
+        output: '',
+      };
+    }
+
+    try {
+      const combinedOutput = [];
+      for (const cmd of plan.commands) {
+        const output = execSync(`cd ${worktreePath} && ${cmd} 2>&1`, {
+          stdio: 'pipe',
+          timeout: 120000,
+        }).toString();
+        combinedOutput.push(output.substring(0, 500));
+      }
+
+      return {
+        success: true,
+        output: combinedOutput.join('\n').substring(0, 1000),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message.substring(0, 500),
+      };
+    }
   }
 
   /**
@@ -46,10 +117,27 @@ class CodeExecutor {
       errors: [],
       duration: 0,
       healingReport: {},
+      healingDetails: {},
     };
 
+    const customGenerator = this._healingOptions.remediationGenerator;
+
     // Fresh SelfHealingCI instance per task execution
-    const healer = new SelfHealingCI(this._healingOptions);
+    const healer = new SelfHealingCI({
+      ...this._healingOptions,
+      remediationGenerator: (stageName, classification, result, attempt, context) => {
+        if (typeof customGenerator === 'function') {
+          return customGenerator(stageName, classification, result, attempt, context, task, wt.path);
+        }
+        return this._buildDefaultRemediationPlan(stageName, classification, result, attempt, context);
+      },
+      remediationExecutor: async (plan) => {
+        if (typeof this._healingOptions.remediationExecutor === 'function') {
+          return this._healingOptions.remediationExecutor(plan, task, wt.path);
+        }
+        return this._runRemediationPlan(wt.path, plan);
+      },
+    });
 
     try {
       // Stage 1: Lint (with self-healing)
@@ -61,6 +149,7 @@ class CodeExecutor {
         results.errors.push(`Linting failed (${lintResult.classification}): ${lintResult.lastError}`);
         results.duration = Date.now() - startTime;
         results.healingReport = healer.summary();
+        results.healingDetails = healer.report();
         return results;
       }
 
@@ -73,6 +162,7 @@ class CodeExecutor {
         results.errors.push(`Tests failed (${testResult.classification}): ${testResult.lastError}`);
         results.duration = Date.now() - startTime;
         results.healingReport = healer.summary();
+        results.healingDetails = healer.report();
         return results;
       }
 
@@ -85,18 +175,21 @@ class CodeExecutor {
         results.errors.push(`Commit failed (${commitResult.classification}): ${commitResult.lastError}`);
         results.duration = Date.now() - startTime;
         results.healingReport = healer.summary();
+        results.healingDetails = healer.report();
         return results;
       }
 
       results.success = true;
       results.duration = Date.now() - startTime;
       results.healingReport = healer.summary();
+      results.healingDetails = healer.report();
       console.log(`[Executor] Task ${task.id}: SUCCESS (${results.duration}ms)`);
       return results;
     } catch (error) {
       results.errors.push(error.message);
       results.duration = Date.now() - startTime;
       results.healingReport = healer.summary();
+      results.healingDetails = healer.report();
       console.error(`[Executor] Task ${task.id}: ERROR`, error.message);
       return results;
     }

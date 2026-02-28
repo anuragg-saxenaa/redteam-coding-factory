@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 
 class WorktreeManager {
@@ -33,7 +33,7 @@ class WorktreeManager {
 
     try {
       // Create worktree from base repo
-      execSync(`git -C ${this.baseRepo} worktree add ${worktreePath} ${branch}`, {
+      execFileSync('git', ['-C', this.baseRepo, 'worktree', 'add', worktreePath, branch], {
         stdio: 'pipe',
       });
 
@@ -79,7 +79,7 @@ class WorktreeManager {
     if (!wt) throw new Error(`Worktree ${id} not found`);
 
     try {
-      execSync(`git -C ${this.baseRepo} worktree remove ${wt.path}`, {
+      execFileSync('git', ['-C', this.baseRepo, 'worktree', 'remove', wt.path], {
         stdio: 'pipe',
       });
       wt.status = 'removed';

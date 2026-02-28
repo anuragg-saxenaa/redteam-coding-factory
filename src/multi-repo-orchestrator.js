@@ -16,6 +16,12 @@ class MultiRepoOrchestrator {
     this.dependencyGraph = new Map(); // taskId → [dependentTaskIds]
     this.results = new Map(); // taskId → result
     this.dataDir = config.dataDir || './data';
+    this.maxRetries = config.maxRetries ?? 3;
+    this.maxRetryBudget = config.maxRetryBudget ?? 6;
+    this.enableAutoRemediation = config.enableAutoRemediation ?? false;
+    this.maxRemediationAttempts = config.maxRemediationAttempts ?? 1;
+    this.baseDelayMs = config.baseDelayMs ?? 200;
+    this.maxDelayMs = config.maxDelayMs ?? 4000;
     this.isRunning = false;
 
     this._initializeFactories();
@@ -33,6 +39,12 @@ class MultiRepoOrchestrator {
         validationMode: 'default',
         enablePush: false,
         createPR: false,
+        maxRetries: this.maxRetries,
+        maxRetryBudget: this.maxRetryBudget,
+        enableAutoRemediation: this.enableAutoRemediation,
+        maxRemediationAttempts: this.maxRemediationAttempts,
+        baseDelayMs: this.baseDelayMs,
+        maxDelayMs: this.maxDelayMs,
       };
       const factory = new CodingFactory(factoryConfig);
       this.factories.set(repo.name, factory);
@@ -52,6 +64,12 @@ class MultiRepoOrchestrator {
       baseRepo: repoPath,
       dataDir: path.join(this.dataDir, name),
       worktreeRoot: path.join(this.dataDir, name, 'worktrees'),
+      maxRetries: this.maxRetries,
+      maxRetryBudget: this.maxRetryBudget,
+      enableAutoRemediation: this.enableAutoRemediation,
+      maxRemediationAttempts: this.maxRemediationAttempts,
+      baseDelayMs: this.baseDelayMs,
+      maxDelayMs: this.maxDelayMs,
     };
     const factory = new CodingFactory(factoryConfig);
     this.factories.set(name, factory);
