@@ -1,0 +1,3 @@
+=== RedTeam CI/CD Run Fri Feb 27 02:07:04 EST 2026 ===
+Running redteam-factory with factory.config.json...
+./scripts/redteam-ci-cd.sh: line 29: redteam-factory: command not found

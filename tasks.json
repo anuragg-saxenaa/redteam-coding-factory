@@ -11,11 +11,5 @@
     "commands": [
       "npm test"
     ]
-  },
-  "deploy": {
-    "description": "Deploy to production",
-    "commands": [
-      "npm run deploy"
-    ]
   }
 }

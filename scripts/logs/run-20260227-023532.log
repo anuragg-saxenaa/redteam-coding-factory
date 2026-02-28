@@ -1,0 +1,15 @@
+=== RedTeam CI/CD Run Fri Feb 27 02:35:32 EST 2026 ===
+Running redteam-factory with factory.config.json...
+[MultiRepoOrchestrator] Initialized factory for repo: redteam-coding-factory
+[RedTeamFactory] Initialized with 1 repos
+Error: Error: tasks.json must be an array
+    at main (/Users/redinside/Development/Codebase/projects/RedTeam/github/redteam-coding-factory/src/cli.js:171:38)
+    at Object.<anonymous> (/Users/redinside/Development/Codebase/projects/RedTeam/github/redteam-coding-factory/src/cli.js:187:1)
+    at Module._compile (node:internal/modules/cjs/loader:1706:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1839:10)
+    at Module.load (node:internal/modules/cjs/loader:1441:32)
+    at Module._load (node:internal/modules/cjs/loader:1263:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49

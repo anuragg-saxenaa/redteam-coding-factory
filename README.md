@@ -20,6 +20,14 @@ redteam-factory run --config factory.config.json --tasks tasks.json
 redteam-factory --help
 ```
 
+### CI/CD Integration (Production)
+
+```bash
+# Use the CI/CD entrypoint script
+cd scripts/
+./redteam-ci-cd.sh
+```
+
 ### Programmatic (Node.js)
 
 ```javascript
@@ -51,45 +59,70 @@ const results = await factory.run();
 console.log(results);
 ```
 
-## Configuration
+## CI/CD Configuration
 
-### Repo Allowlist
+### Factory Configuration
 
-Define which repos the factory can access:
+Create `factory.config.json` in your project root:
 
-```javascript
-const repos = [
-  { name: 'core', path: '/repos/core.git', branch: 'main' },
-  { name: 'api', path: '/repos/api.git', branch: 'main' },
-  { name: 'web', path: '/repos/web.git', branch: 'main' }
-];
-
-factory.initialize(repos);
-```
-
-### Concurrency Caps
-
-Control how many tasks run in parallel (per repo):
-
-```javascript
-// Modify MultiRepoOrchestrator to add concurrency control:
-class MultiRepoOrchestrator {
-  constructor(config = {}) {
-    this.maxConcurrentTasks = config.maxConcurrentTasks || 1; // Default: serial
-    this.activeTasks = new Map(); // repoName → count
-  }
-
-  async processNext() {
-    // Check concurrency cap before processing
-    for (const [repoName, factory] of this.factories) {
-      const activeCount = this.activeTasks.get(repoName) || 0;
-      if (activeCount < this.maxConcurrentTasks) {
-        // Process task for this repo
-      }
-    }
+```json
+{
+  "pipeline": "git",
+  "version": "1.0.0",
+  "tasks": [
+    "build",
+    "test",
+    "deploy"
+  ],
+  "environment": {
+    "node_version": "20",
+    "python_version": "3.11"
   }
 }
 ```
+
+### Task Definitions
+
+Create `tasks.json` to define specific commands for each task:
+
+```json
+{
+  "build": {
+    "description": "Build the project",
+    "commands": [
+      "npm install",
+      "npm run build"
+    ]
+  },
+  "test": {
+    "description": "Run tests",
+    "commands": [
+      "npm test"
+    ]
+  },
+  "deploy": {
+    "description": "Deploy to production",
+    "commands": [
+      "npm run deploy"
+    ]
+  }
+}
+```
+
+### CI/CD Entrypoint
+
+The CI/CD entrypoint script (`scripts/redteam-ci-cd.sh`) provides production-ready execution:
+
+```bash
+cd scripts/
+./redteam-ci-cd.sh
+```
+
+This script includes:
+- Input validation for config files
+- Logging to timestamped files
+- Error handling and exit codes
+- Production-ready execution
 
 ## Architecture
 
@@ -106,7 +139,7 @@ class MultiRepoOrchestrator {
 npm test
 ```
 
-Metrics are written to `dataDir/metrics.json` (runtime state) so test runs don’t dirty the git repo.
+Metrics are written to `dataDir/metrics.json` (runtime state) so test runs don't dirty the git repo.
 
 All 3 test suites pass:
 - `test/integration.test.js` — Phases 1-5
@@ -119,3 +152,7 @@ All 3 test suites pass:
 - **Critic gate** — validates results before push/PR
 - **Force mode logging** — audit trail for overrides
 - **Dry-run mode** — test without side effects
+
+## Production Deployment
+
+See [PRODUCTION-DEPLOYMENT.md](./PRODUCTION-DEPLOYMENT.md) for detailed deployment instructions.

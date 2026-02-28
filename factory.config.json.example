@@ -1,38 +1,13 @@
 {
-  "workspaceRoot": "/tmp/redteam-factory-workspace",
-  "dataDir": "/tmp/redteam-factory-workspace/.factory-data",
-  "maxConcurrentTasks": 1,
-  "enablePush": false,
-  "createPR": false,
-  "repos": [
-    {
-      "name": "core",
-      "path": "/path/to/core.git",
-      "branch": "main"
-    },
-    {
-      "name": "api",
-      "path": "/path/to/api.git",
-      "branch": "main"
-    },
-    {
-      "name": "web",
-      "path": "/path/to/web.git",
-      "branch": "main"
-    }
+  "pipeline": "git",
+  "version": "1.0.0",
+  "tasks": [
+    "build",
+    "test",
+    "deploy"
   ],
-  "agentConfig": {
-    "model": "openai-codex/gpt-5.2",
-    "temperature": 0.7,
-    "maxTokens": 4096
-  },
-  "criticGate": {
-    "enabled": true,
-    "requireValidation": true,
-    "forceMode": false
-  },
-  "logging": {
-    "level": "info",
-    "dir": "/tmp/redteam-factory-workspace/logs"
+  "environment": {
+    "node_version": "20",
+    "python_version": "3.11"
   }
 }

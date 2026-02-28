@@ -1,0 +1,168 @@
+/**
+ * Issue Watcher Tests — Phase 2
+ * Tests the polling daemon that bridges GitHub issues → factory pipeline
+ */
+
+const IssueWatcher = require('../src/issue-watcher');
+const assert = require('assert');
+
+let passed = 0;
+let failed = 0;
+
+function ok(condition, label) {
+  if (condition) {
+    console.log(`  ✓ ${label}`);
+    passed++;
+  } else {
+    console.error(`  ✗ ${label}`);
+    failed++;
+  }
+}
+
+// --- Test 1: Construction with defaults ---
+console.log('Test 1: Default construction');
+{
+  const watcher = new IssueWatcher({
+    repo: 'test/repo',
+    repoPath: '/tmp/test-repo',
+  });
+  ok(watcher.repo === 'test/repo', 'repo set');
+  ok(watcher.repoPath === '/tmp/test-repo', 'repoPath set');
+  ok(watcher.branch === 'main', 'default branch');
+  ok(watcher.pollIntervalMs === 60000, 'default poll interval 60s');
+  ok(watcher.maxConcurrent === 1, 'default max concurrent 1');
+  ok(watcher.enablePush === false, 'push disabled by default');
+  ok(watcher.createPR === false, 'PR disabled by default');
+  ok(watcher.autoClose === false, 'autoClose disabled by default');
+  ok(watcher.agentName === 'codex', 'default agent is codex');
+  ok(watcher._running === false, 'not running initially');
+}
+
+// --- Test 2: Custom config ---
+console.log('Test 2: Custom construction');
+{
+  const watcher = new IssueWatcher({
+    repo: 'org/my-repo',
+    repoPath: '/tmp/issue-watcher-test-repo',
+    dataDir: '/tmp/issue-watcher-test-data',
+    branch: 'develop',
+    pollIntervalMs: 30000,
+    maxConcurrent: 3,
+    enablePush: true,
+    createPR: true,
+    autoClose: true,
+    agent: 'claude',
+    agentTimeoutMs: 10 * 60 * 1000,
+    label: 'auto-fix',
+  });
+  ok(watcher.repo === 'org/my-repo', 'custom repo');
+  ok(watcher.branch === 'develop', 'custom branch');
+  ok(watcher.pollIntervalMs === 30000, 'custom poll interval');
+  ok(watcher.maxConcurrent === 3, 'custom max concurrent');
+  ok(watcher.enablePush === true, 'push enabled');
+  ok(watcher.createPR === true, 'PR enabled');
+  ok(watcher.autoClose === true, 'autoClose enabled');
+  ok(watcher.agentName === 'claude', 'custom agent');
+}
+
+// --- Test 3: Stats tracking ---
+console.log('Test 3: Stats tracking');
+{
+  const watcher = new IssueWatcher({
+    repo: 'test/repo',
+    repoPath: '/tmp/test-repo',
+  });
+  const stats = watcher.stats();
+  ok(stats.polled === 0, 'initial polled 0');
+  ok(stats.started === 0, 'initial started 0');
+  ok(stats.completed === 0, 'initial completed 0');
+  ok(stats.failed === 0, 'initial failed 0');
+  ok(stats.skipped === 0, 'initial skipped 0');
+  ok(stats.active === 0, 'initial active 0');
+  ok(stats.running === false, 'initial not running');
+  ok(stats.processed === 0, 'initial processed 0');
+}
+
+// --- Test 4: Requires repo for start ---
+console.log('Test 4: Requires repo for start');
+{
+  const watcher = new IssueWatcher({ repoPath: '/tmp/test' });
+  let threw = false;
+  try {
+    watcher.start();
+  } catch (err) {
+    threw = true;
+    ok(err.message.includes('repo is required'), 'error mentions repo');
+  }
+  ok(threw, 'throws without repo');
+}
+
+// --- Test 5: Requires repoPath for start ---
+console.log('Test 5: Requires repoPath for start');
+{
+  const watcher = new IssueWatcher({ repo: 'test/repo' });
+  let threw = false;
+  try {
+    watcher.start();
+  } catch (err) {
+    threw = true;
+    ok(err.message.includes('repoPath is required'), 'error mentions repoPath');
+  }
+  ok(threw, 'throws without repoPath');
+}
+
+// --- Test 6: Stop sets state correctly ---
+console.log('Test 6: Stop sets state');
+{
+  const watcher = new IssueWatcher({
+    repo: 'test/repo',
+    repoPath: '/tmp/test-repo',
+  });
+  // Manually set running state
+  watcher._running = true;
+  watcher._timer = setInterval(() => {}, 99999);
+  watcher.stop();
+  ok(watcher._running === false, 'stopped after stop()');
+  ok(watcher._timer === null, 'timer cleared');
+}
+
+(async () => {
+  // --- Test 7: pollOnce requires config ---
+  console.log('Test 7: pollOnce requires config');
+  {
+    const watcher = new IssueWatcher({ repo: 'test/repo', repoPath: '/tmp/test' });
+    // Remove repo to force error
+    watcher.repo = null;
+    let threw = false;
+    try {
+      await watcher.pollOnce();
+    } catch (err) {
+      threw = true;
+      ok(err.message.includes('repo is required'), 'pollOnce error mentions repo');
+    }
+    // Restore
+    watcher.repo = 'test/repo';
+    if (threw) passed++; else { console.error('  ✗ pollOnce throws without repo'); failed++; }
+  }
+
+  // --- Test 8: Concurrency limit respected ---
+  console.log('Test 8: Concurrency limit');
+  {
+    const watcher = new IssueWatcher({
+      repo: 'test/repo',
+      repoPath: '/tmp/test-repo',
+      maxConcurrent: 1,
+    });
+    // Simulate active task
+    watcher._activeTasks = 1;
+    // _poll should return empty when at capacity
+    const results = await watcher._poll();
+    if (results.length === 0) { console.log('  ✓ returns empty when at capacity'); passed++; }
+    else { console.error('  ✗ failed concurrency check'); failed++; }
+  }
+
+  // --- Summary ---
+  console.log('');
+  console.log(`=== Issue Watcher Tests: ${passed} passed, ${failed} failed ===`);
+  process.exit(failed > 0 ? 1 : 0);
+})();

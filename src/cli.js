@@ -24,9 +24,32 @@
 const fs = require('fs');
 const path = require('path');
 const RedTeamFactory = require('./redteam-factory');
+const IssueWatcher = require('./issue-watcher');
 
 function usage(exitCode = 0) {
-  const msg = `RedTeam Coding Factory CLI\n\nUsage:\n  redteam-factory run --config <factory.config.json> [--tasks <tasks.json>]\n\nOptions:\n  --config   Path to factory config JSON (required)\n  --tasks    Path to tasks JSON (optional; default: none)\n  --help     Show this help\n`;
+  const msg = [
+    'RedTeam Coding Factory CLI',
+    '',
+    'Usage:',
+    '  redteam-factory run   --config <factory.config.json> [--tasks <tasks.json>]',
+    '  redteam-factory watch --config <factory.config.json>',
+    '',
+    'Commands:',
+    '  run     Run factory with explicit task list, then exit',
+    '  watch   Poll GitHub for "factory-ready" issues and process them continuously',
+    '',
+    'Options:',
+    '  --config     Path to factory config JSON (required)',
+    '  --tasks      Path to tasks JSON (run mode only; optional)',
+    '  --once       In watch mode: poll once and exit instead of running as daemon',
+    '  --interval   Poll interval in seconds (watch mode; default: 60)',
+    '  --agent      Coding agent preset: codex|claude (watch mode; default: codex)',
+    '  --push       Enable git push (watch mode; default: false)',
+    '  --pr         Enable PR creation (watch mode; default: false)',
+    '  --auto-close Auto-close issues on success (watch mode; default: false)',
+    '  --help       Show this help',
+    '',
+  ].join('\n');
   process.stdout.write(msg);
   process.exit(exitCode);
 }
@@ -38,6 +61,12 @@ function parseArgs(argv) {
     if (a === '--help' || a === '-h') args.help = true;
     else if (a === '--config') args.config = argv[++i];
     else if (a === '--tasks') args.tasks = argv[++i];
+    else if (a === '--once') args.once = true;
+    else if (a === '--interval') args.interval = parseInt(argv[++i], 10);
+    else if (a === '--agent') args.agent = argv[++i];
+    else if (a === '--push') args.push = true;
+    else if (a === '--pr') args.pr = true;
+    else if (a === '--auto-close') args.autoClose = true;
     else args._.push(a);
   }
   return args;
@@ -56,7 +85,7 @@ async function main() {
   if (args.help || args._.length === 0) usage(args.help ? 0 : 1);
 
   const cmd = args._[0];
-  if (cmd !== 'run') {
+  if (cmd !== 'run' && cmd !== 'watch') {
     process.stderr.write(`Unknown command: ${cmd}\n\n`);
     usage(1);
   }
@@ -67,6 +96,73 @@ async function main() {
   }
 
   const config = readJson(args.config);
+
+  if (cmd === 'watch') {
+    // Watch mode: poll GitHub issues and run through factory
+    if (!config.github || !config.github.repo) {
+      process.stderr.write('Watch mode requires config.github.repo (e.g. "owner/repo")\n');
+      process.exit(1);
+    }
+
+    // Determine repoPath — first repo in config or explicit github.repoPath
+    const repoPath = config.github.repoPath
+      || (config.repos && config.repos[0] && config.repos[0].path)
+      || process.cwd();
+
+    const watcher = new IssueWatcher({
+      repo: config.github.repo,
+      repoPath,
+      branch: config.github.branch || 'main',
+      label: config.github.label || 'factory-ready',
+      pollIntervalMs: (args.interval || config.github.pollIntervalSec || 60) * 1000,
+      maxConcurrent: config.github.maxConcurrent || 1,
+      agent: args.agent || config.github.agent || 'codex',
+      agentTimeoutMs: (config.github.agentTimeoutSec || 300) * 1000,
+      enablePush: args.push || config.enablePush || false,
+      createPR: args.pr || config.createPR || false,
+      autoClose: args.autoClose || config.github.autoClose || false,
+      dataDir: config.dataDir,
+      maxRetries: config.maxRetries || 3,
+      onPoll: (count) => {
+        if (count > 0) console.log(`[CLI] Found ${count} issues`);
+      },
+      onTaskComplete: (issueNumber, result) => {
+        console.log(`[CLI] ✓ Issue #${issueNumber} completed`);
+      },
+      onTaskFail: (issueNumber, error) => {
+        console.error(`[CLI] ✗ Issue #${issueNumber} failed: ${error}`);
+      },
+    });
+
+    if (args.once) {
+      // One-shot mode: poll once and exit
+      console.log('[CLI] Watch mode (one-shot)...');
+      const results = await watcher.pollOnce();
+      const stats = watcher.stats();
+      console.log(`\nPoll complete. ${stats.completed} completed, ${stats.failed} failed.`);
+      process.stdout.write(JSON.stringify(results, null, 2) + '\n');
+    } else {
+      // Daemon mode: poll continuously
+      console.log('[CLI] Watch mode (daemon)...');
+      console.log('[CLI] Press Ctrl+C to stop');
+
+      // Graceful shutdown
+      const shutdown = () => {
+        console.log('\n[CLI] Shutting down...');
+        watcher.stop();
+        const stats = watcher.stats();
+        console.log(`Final stats: ${JSON.stringify(stats)}`);
+        process.exit(0);
+      };
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
+
+      watcher.start();
+    }
+    return;
+  }
+
+  // --- run command ---
   const factory = new RedTeamFactory(config);
   factory.initialize(config.repos || []);
 

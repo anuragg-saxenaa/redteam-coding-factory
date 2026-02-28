@@ -1,0 +1,20 @@
+{
+  "pipeline": "redteam-coding-factory",
+  "version": "1.0.0",
+  "tasks": [
+    "build",
+    "test"
+  ],
+  "environment": {
+    "node_version": "20",
+    "python_version": "3.11"
+  },
+  "dataDir": "./.factory-data",
+  "repos": [
+    {
+      "name": "redteam-coding-factory",
+      "path": ".",
+      "branch": "main"
+    }
+  ]
+}

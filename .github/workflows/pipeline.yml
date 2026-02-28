@@ -10,8 +10,62 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
       - run: shellcheck -x scripts/*.sh
 
-  smoke:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm ci
+      - run: npm test
+
+  factory:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash scripts/factory-run.sh --help
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Create factory config
+        run: |
+          cat > factory.config.json << 'EOF'
+          {
+            "pipeline": "git",
+            "version": "1.0.0",
+            "tasks": ["build", "test"],
+            "dataDir": "/tmp/factory-data",
+            "repos": [
+              {
+                "name": "redteam-coding-factory",
+                "path": ".",
+                "branch": "main"
+              }
+            ],
+            "enablePush": false,
+            "createPR": false
+          }
+          EOF
+      - name: Create tasks config
+        run: |
+          cat > tasks.json << 'EOF'
+          {
+            "build": {
+              "description": "Build the project",
+              "commands": ["npm install", "npm run build"]
+            },
+            "test": {
+              "description": "Run tests",
+              "commands": ["npm test"]
+            }
+          }
+          EOF
+      - name: Run factory
+        run: npx redteam-factory run --config factory.config.json
+
+      - name: Run factory
+        run: node cli-entrypoint.js run --config factory.config.json --tasks tasks.json

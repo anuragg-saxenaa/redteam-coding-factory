@@ -1,0 +1,22 @@
+=== RedTeam CI/CD Run Fri Feb 27 02:08:37 EST 2026 ===
+Running redteam-factory with factory.config.json...
+RedTeam Coding Factory CLI
+
+Usage:
+  redteam-factory run   --config <factory.config.json> [--tasks <tasks.json>]
+  redteam-factory watch --config <factory.config.json>
+
+Commands:
+  run     Run factory with explicit task list, then exit
+  watch   Poll GitHub for "factory-ready" issues and process them continuously
+
+Options:
+  --config     Path to factory config JSON (required)
+  --tasks      Path to tasks JSON (run mode only; optional)
+  --once       In watch mode: poll once and exit instead of running as daemon
+  --interval   Poll interval in seconds (watch mode; default: 60)
+  --agent      Coding agent preset: codex|claude (watch mode; default: codex)
+  --push       Enable git push (watch mode; default: false)
+  --pr         Enable PR creation (watch mode; default: false)
+  --auto-close Auto-close issues on success (watch mode; default: false)
+  --help       Show this help
