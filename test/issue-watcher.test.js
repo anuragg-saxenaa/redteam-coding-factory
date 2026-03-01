@@ -36,6 +36,7 @@ console.log('Test 1: Default construction');
   ok(watcher.autoClose === false, 'autoClose disabled by default');
   ok(watcher.agentName === 'codex', 'default agent is codex');
   ok(watcher._running === false, 'not running initially');
+  ok(watcher.stopReason === null, 'stop reason unset by default');
 }
 
 // --- Test 2: Custom config ---
@@ -159,6 +160,54 @@ console.log('Test 6: Stop sets state');
     const results = await watcher._poll();
     if (results.length === 0) { console.log('  ✓ returns empty when at capacity'); passed++; }
     else { console.error('  ✗ failed concurrency check'); failed++; }
+  }
+
+  // --- Test 9: Stop condition maxTasksPerRun ---
+  console.log('Test 9: maxTasksPerRun stop condition');
+  {
+    const watcher = new IssueWatcher({
+      repo: 'test/repo',
+      repoPath: '/tmp/test-repo',
+      maxTasksPerRun: 1,
+    });
+    watcher._stats.completed = 1;
+    const results = await watcher._poll();
+    const stats = watcher.stats();
+    if (results.length === 0) { console.log('  ✓ returns no tasks when task budget reached'); passed++; }
+    else { console.error('  ✗ should not process when task budget reached'); failed++; }
+    if (typeof stats.stopReason === 'string' && stats.stopReason.includes('task budget reached')) { console.log('  ✓ captures task budget stop reason'); passed++; }
+    else { console.error('  ✗ missing task budget stop reason'); failed++; }
+  }
+
+  // --- Test 10: Poll processes up to available slots in parallel ---
+  console.log('Test 10: parallel task dispatch within concurrency cap');
+  {
+    const watcher = new IssueWatcher({
+      repo: 'test/repo',
+      repoPath: '/tmp/test-repo',
+      maxConcurrent: 2,
+    });
+
+    watcher.intake.poll = () => ([
+      { metadata: { issueNumber: 11 }, title: 'Issue 11' },
+      { metadata: { issueNumber: 12 }, title: 'Issue 12' },
+      { metadata: { issueNumber: 13 }, title: 'Issue 13' },
+    ]);
+
+    let started = 0;
+    watcher._processIssue = async (_task, issueNumber) => {
+      started++;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      watcher._stats.completed++;
+      watcher._activeTasks--;
+      return { issueNumber, success: true };
+    };
+
+    const results = await watcher._poll();
+    if (results.length === 2) { console.log('  ✓ dispatches only up to concurrency slots'); passed++; }
+    else { console.error(`  ✗ expected 2 results, got ${results.length}`); failed++; }
+    if (started === 2) { console.log('  ✓ starts only two workers when maxConcurrent=2'); passed++; }
+    else { console.error(`  ✗ expected 2 workers, got ${started}`); failed++; }
   }
 
   // --- Summary ---

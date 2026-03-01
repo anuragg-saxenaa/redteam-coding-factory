@@ -54,6 +54,13 @@ class IssueWatcher {
     this.agentName = config.agent || 'codex';
     this.agentTimeoutMs = config.agentTimeoutMs || 5 * 60 * 1000;
     this.dataDir = config.dataDir || path.join(this.repoPath || '.', '.factory-data');
+    this.maxTasksPerRun = Number.isFinite(config.maxTasksPerRun) && config.maxTasksPerRun > 0
+      ? config.maxTasksPerRun
+      : Infinity;
+    this.maxPolls = Number.isFinite(config.maxPolls) && config.maxPolls > 0
+      ? config.maxPolls
+      : Infinity;
+    this.stopReason = null;
 
     // Callbacks
     this.onTaskComplete = config.onTaskComplete || null;
@@ -145,6 +152,10 @@ class IssueWatcher {
    * Internal: execute one poll cycle
    */
   async _poll() {
+    if (this._shouldStopBeforePoll()) {
+      return [];
+    }
+
     if (this._activeTasks >= this.maxConcurrent) {
       console.log(`[IssueWatcher] Skipping poll — ${this._activeTasks} active tasks (max: ${this.maxConcurrent})`);
       return [];
@@ -173,7 +184,14 @@ class IssueWatcher {
     console.log(`[IssueWatcher] Found ${tasks.length} new issue(s)`);
 
     const results = [];
+    const availableSlots = Math.max(0, this.maxConcurrent - this._activeTasks);
+    const workers = [];
+
     for (const task of tasks) {
+      if (workers.length >= availableSlots) {
+        break;
+      }
+
       const issueNumber = task.metadata?.issueNumber;
 
       if (this._processedIssues.has(issueNumber)) {
@@ -190,12 +208,39 @@ class IssueWatcher {
       this._activeTasks++;
       this._stats.started++;
 
-      // Process asynchronously
-      const result = await this._processIssue(task, issueNumber);
-      results.push(result);
+      // Process asynchronously up to the configured concurrency cap.
+      workers.push(
+        this._processIssue(task, issueNumber)
+          .then((result) => {
+            results.push(result);
+            return result;
+          })
+      );
     }
 
+    await Promise.all(workers);
+
     return results;
+  }
+
+  _shouldStopBeforePoll() {
+    const processed = this._stats.completed + this._stats.failed;
+
+    if (processed >= this.maxTasksPerRun) {
+      this.stopReason = this.stopReason || `task budget reached (${processed}/${this.maxTasksPerRun})`;
+    } else if (this._stats.polled >= this.maxPolls) {
+      this.stopReason = this.stopReason || `poll budget reached (${this._stats.polled}/${this.maxPolls})`;
+    }
+
+    if (!this.stopReason) {
+      return false;
+    }
+
+    if (this._running) {
+      console.log(`[IssueWatcher] Stop condition reached: ${this.stopReason}`);
+      this.stop();
+    }
+    return true;
   }
 
   /**
@@ -353,6 +398,7 @@ class IssueWatcher {
       active: this._activeTasks,
       running: this._running,
       processed: this._processedIssues.size,
+      stopReason: this.stopReason,
     };
   }
 }

@@ -49,6 +49,8 @@ function usage(exitCode = 0) {
     '  --auto-close Auto-close issues on success (watch mode; default: false)',
     '  --remediate  Enable guarded auto-remediation (watch mode; default: false)',
     '  --retry-budget Max retry budget across stages (watch mode; default: 6)',
+    '  --max-tasks   Stop daemon after N processed issues (watch mode)',
+    '  --max-polls   Stop daemon after N poll cycles (watch mode)',
     '  --help       Show this help',
     '',
   ].join('\n');
@@ -71,15 +73,48 @@ function parseArgs(argv) {
     else if (a === '--auto-close') args.autoClose = true;
     else if (a === '--remediate') args.remediate = true;
     else if (a === '--retry-budget') args.retryBudget = parseInt(argv[++i], 10);
+    else if (a === '--max-tasks') args.maxTasks = parseInt(argv[++i], 10);
+    else if (a === '--max-polls') args.maxPolls = parseInt(argv[++i], 10);
     else args._.push(a);
   }
   return args;
 }
 
+
 function readJson(p) {
   const abs = path.resolve(process.cwd(), p);
   const raw = fs.readFileSync(abs, 'utf8');
   return JSON.parse(raw);
+}
+
+function normalizeTasks(tasksDoc, config) {
+  if (Array.isArray(tasksDoc)) return tasksDoc;
+
+  // Backward compatibility: legacy tasks.json keyed by stage name.
+  if (tasksDoc && typeof tasksDoc === 'object') {
+    const defaultRepo = config.repos && config.repos[0];
+    if (!defaultRepo || !defaultRepo.name) {
+      throw new Error('legacy tasks.json requires config.repos[0].name to infer target repo');
+    }
+
+    return Object.entries(tasksDoc).map(([name, spec]) => {
+      const description = spec && typeof spec.description === 'string'
+        ? spec.description
+        : `Run ${name} stage`;
+      const commands = Array.isArray(spec && spec.commands) ? spec.commands : [];
+      const commandLines = commands.length > 0
+        ? `\n\nCommands:\n${commands.map((c) => `- ${c}`).join('\n')}`
+        : '';
+
+      return {
+        repo: defaultRepo.name,
+        title: `Run ${name}`,
+        description: `${description}${commandLines}`,
+      };
+    });
+  }
+
+  throw new Error('tasks.json must be either an array of tasks or a legacy object keyed by stage name');
 }
 
 async function main() {
@@ -129,6 +164,8 @@ async function main() {
       maxRetries: config.maxRetries || 3,
       enableAutoRemediation: args.remediate || config.enableAutoRemediation || false,
       maxRetryBudget: args.retryBudget || config.maxRetryBudget || 6,
+      maxTasksPerRun: args.maxTasks || config.github.maxTasksPerRun,
+      maxPolls: args.maxPolls || config.github.maxPolls,
       onPoll: (count) => {
         if (count > 0) console.log(`[CLI] Found ${count} issues`);
       },
@@ -173,8 +210,7 @@ async function main() {
   factory.initialize(config.repos || []);
 
   if (args.tasks) {
-    const tasks = readJson(args.tasks);
-    if (!Array.isArray(tasks)) throw new Error('tasks.json must be an array');
+    const tasks = normalizeTasks(readJson(args.tasks), config);
 
     for (const t of tasks) {
       if (t.crossRepo) {
@@ -190,7 +226,16 @@ async function main() {
   process.stdout.write(`\nRun complete. Results:\n${JSON.stringify(results, null, 2)}\n`);
 }
 
-main().catch((err) => {
-  process.stderr.write(`Error: ${err && err.stack ? err.stack : String(err)}\n`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    process.stderr.write(`Error: ${err && err.stack ? err.stack : String(err)}\n`);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  parseArgs,
+  readJson,
+  normalizeTasks,
+  main,
+};

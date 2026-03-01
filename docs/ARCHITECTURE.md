@@ -13,8 +13,8 @@ Produce PRs autonomously with verifiable accountability:
 - Closed loop: issue → PR → CI → fix → review → fix → ready
 
 ## Phase 2 (Scale)
-- scheduler + concurrency caps
+- scheduler + concurrency caps (implemented in `IssueWatcher` poll worker dispatch)
+- budgets + stop conditions (implemented via `maxTasksPerRun` and `maxPolls`)
 - conflict/rebase reactions
-- budgets + stop conditions
 - security diff scanning + escalation rules
 - dashboard / status board
