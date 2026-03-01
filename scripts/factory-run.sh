@@ -11,6 +11,7 @@ Phase-1 POC:
 - run a coding agent CLI in the worktree (codex/claude/custom)
 - run tests and report pass/fail
 - optionally push + create PR, then poll CI checks and self-heal up to 3 attempts
+- write run metrics to ops/metrics.json and post to Slack webhook when configured
 
 Defaults:
 - task: hardcoded POC task
@@ -28,6 +29,7 @@ agent_cmd=""
 test_cmd="npm test"
 create_pr="false"
 ci_max_attempts=3
+run_started_epoch="$(date +%s)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -124,6 +126,102 @@ if [[ -e "$worktree_path" ]]; then
   echo "Worktree path already exists: $worktree_path" >&2
   exit 1
 fi
+
+append_metrics_entry() {
+  local metrics_path="$repo_root/ops/metrics.json"
+  local end_iso
+  local duration_sec
+  local overall_result
+  local attempts
+
+  end_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  duration_sec=$(( $(date +%s) - run_started_epoch ))
+  overall_result="pass"
+  attempts=1
+
+  if [[ "$result" != "pass" ]]; then
+    overall_result="fail"
+  fi
+
+  if [[ "$create_pr" == "true" ]]; then
+    attempts="$ci_attempts"
+    if [[ "$attempts" -lt 1 ]]; then
+      attempts=1
+    fi
+    if [[ "$ci_result" != "passed" && "$ci_result" != "skipped" ]]; then
+      overall_result="fail"
+    fi
+  fi
+
+  mkdir -p "$(dirname "$metrics_path")"
+  if [[ ! -f "$metrics_path" ]]; then
+    printf '[]\n' >"$metrics_path"
+  fi
+
+  FACTORY_METRICS_TIMESTAMP="$end_iso" \
+  FACTORY_METRICS_TASK="$task" \
+  FACTORY_METRICS_BRANCH="$branch" \
+  FACTORY_METRICS_DURATION="$duration_sec" \
+  FACTORY_METRICS_RESULT="$overall_result" \
+  FACTORY_METRICS_ATTEMPTS="$attempts" \
+  FACTORY_METRICS_CREATE_PR="$create_pr" \
+  FACTORY_METRICS_PR_URL="$pr_url" \
+  FACTORY_METRICS_CI_RESULT="$ci_result" \
+  FACTORY_METRICS_CI_LAST_ERROR="$ci_last_error" \
+  python3 - "$metrics_path" <<'METRICS_PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+metrics_path = Path(sys.argv[1])
+raw = metrics_path.read_text(encoding='utf-8') if metrics_path.exists() else '[]'
+try:
+    records = json.loads(raw)
+    if not isinstance(records, list):
+        records = []
+except Exception:
+    records = []
+
+entry = {
+    "timestamp": os.environ.get("FACTORY_METRICS_TIMESTAMP", ""),
+    "task": os.environ.get("FACTORY_METRICS_TASK", ""),
+    "branch": os.environ.get("FACTORY_METRICS_BRANCH", "main"),
+    "durationSec": int(os.environ.get("FACTORY_METRICS_DURATION", "0") or 0),
+    "result": os.environ.get("FACTORY_METRICS_RESULT", "fail"),
+    "attempts": int(os.environ.get("FACTORY_METRICS_ATTEMPTS", "1") or 1),
+    "createPr": os.environ.get("FACTORY_METRICS_CREATE_PR", "false") == "true",
+    "prUrl": os.environ.get("FACTORY_METRICS_PR_URL", ""),
+    "ciResult": os.environ.get("FACTORY_METRICS_CI_RESULT", "not_run"),
+    "ciLastError": os.environ.get("FACTORY_METRICS_CI_LAST_ERROR", ""),
+}
+records.append(entry)
+records = records[-500:]
+metrics_path.write_text(json.dumps(records, indent=2) + "\n", encoding='utf-8')
+METRICS_PY
+}
+
+post_slack_update() {
+  if [[ -z "${SLACK_WEBHOOK_URL:-}" ]]; then
+    return 0
+  fi
+
+  local summary
+  summary="ENG Factory Run - $(date '+%Y-%m-%d %H:%M %Z')
+- Task: $task
+- Result: $final_outcome
+- Attempts: $final_attempts
+- Duration: ${final_duration_sec}s
+- PR: ${pr_url:-none}
+- CI: $ci_result"
+
+  local payload
+  payload="$(printf '%s' "$summary" | python3 -c 'import json,sys; print(json.dumps({"text": sys.stdin.read()}))')"
+
+  curl -fsS -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" >/dev/null || {
+    echo "[factory-run] warning: failed to post Slack update" >&2
+  }
+}
 
 cleanup_worktree() {
   if [[ "$cleanup" == "true" && -d "$worktree_path" ]]; then
@@ -255,11 +353,30 @@ ci_result=$ci_result
 ci_last_error=$ci_last_error
 STATUS
 
+final_outcome="pass"
+final_attempts=1
+final_duration_sec=$(( $(date +%s) - run_started_epoch ))
+
 if [[ "$result" != "pass" ]]; then
-  exit 1
+  final_outcome="fail"
 fi
 
-if [[ "$create_pr" == "true" && "$ci_result" != "passed" && "$ci_result" != "skipped" ]]; then
-  echo "[factory-run] escalation: CI did not pass after $ci_attempts attempt(s)."
+if [[ "$create_pr" == "true" ]]; then
+  final_attempts="$ci_attempts"
+  if [[ "$final_attempts" -lt 1 ]]; then
+    final_attempts=1
+  fi
+  if [[ "$ci_result" != "passed" && "$ci_result" != "skipped" ]]; then
+    final_outcome="fail"
+  fi
+fi
+
+append_metrics_entry
+post_slack_update
+
+if [[ "$final_outcome" != "pass" ]]; then
+  if [[ "$create_pr" == "true" && "$ci_result" != "passed" && "$ci_result" != "skipped" ]]; then
+    echo "[factory-run] escalation: CI did not pass after $ci_attempts attempt(s)."
+  fi
   exit 1
 fi
