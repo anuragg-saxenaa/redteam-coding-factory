@@ -77,7 +77,7 @@ function cleanup(dir) {
 
     const executor = new CodeExecutor(wtm, {
       maxRetries: 2,
-      maxRetryBudget: 4,
+      maxRetryBudget: 10,  // Increased: lint(2) + test(1) + commit(2) + buffer
       enableAutoRemediation: true,
       remediationGenerator: () => ({
         scope: { type: 'lint-only', files: ['lint.sh'], risk: 'low' },
