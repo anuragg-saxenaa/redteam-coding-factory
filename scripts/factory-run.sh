@@ -11,7 +11,7 @@ Phase-1 POC:
 - run a coding agent CLI in the worktree (codex/claude/custom)
 - run tests and report pass/fail
 - optionally push + create PR, then poll CI checks and self-heal up to 3 attempts
-- write run metrics to ops/metrics.json and post to Slack webhook when configured
+- write run metrics to ops/metrics.json (task, duration, pass/fail, attempts) and post to #redos-eng when configured
 
 Defaults:
 - task: hardcoded POC task
@@ -189,6 +189,7 @@ entry = {
     "branch": os.environ.get("FACTORY_METRICS_BRANCH", "main"),
     "durationSec": int(os.environ.get("FACTORY_METRICS_DURATION", "0") or 0),
     "result": os.environ.get("FACTORY_METRICS_RESULT", "fail"),
+    "passFail": os.environ.get("FACTORY_METRICS_RESULT", "fail"),
     "attempts": int(os.environ.get("FACTORY_METRICS_ATTEMPTS", "1") or 1),
     "createPr": os.environ.get("FACTORY_METRICS_CREATE_PR", "false") == "true",
     "prUrl": os.environ.get("FACTORY_METRICS_PR_URL", ""),
@@ -199,6 +200,8 @@ records.append(entry)
 records = records[-500:]
 metrics_path.write_text(json.dumps(records, indent=2) + "\n", encoding='utf-8')
 METRICS_PY
+
+  echo "[factory-run] metrics appended to $metrics_path"
 }
 
 post_slack_update() {
