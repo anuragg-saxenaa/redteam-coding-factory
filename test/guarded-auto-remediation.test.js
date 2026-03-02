@@ -75,7 +75,7 @@ function cleanup(dir) {
       enableAutoRemediation: true,
       remediationGenerator: () => ({
         scope: { type: 'lint-only', files: ['lint.sh'], risk: 'low' },
-        commands: ['touch .lint-fixed'],
+        commands: ['touch .lint-fixed', 'echo "// lint fixed" >> lint.sh'],
       }),
     });
 
