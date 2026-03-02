@@ -43,7 +43,7 @@ function classifyFailure(error = '', output = '') {
   if (/lock|eacces|permission denied/.test(combined))            return 'LOCK_CONTENTION';
   if (/timed? ?out|etimedout/.test(combined))                    return 'TIMEOUT';
   if (/flaky|intermittent|retry/.test(combined))                 return 'FLAKY_TEST';
-  if (/eslint|lint error|no-unused|no-undef/.test(combined))     return 'LINT_ERROR';
+  if (/eslint|lint error|no-unused|no-undef|missing script[:\s\"']*lint/.test(combined)) return 'LINT_ERROR';
   if (/typeerror|ts\(|type error|type mismatch/.test(combined))  return 'TYPE_ERROR';
   if (/syntaxerror|unexpected token|cannot find module/.test(combined)) return 'BUILD_ERROR';
   if (/cannot resolve|missing peer|not found: \w+@/.test(combined))    return 'DEPENDENCY_ERROR';

@@ -6,10 +6,12 @@
 const path = require('path');
 
 class AgentIntegration {
-  constructor(factory, agentId = 'eng') {
+  constructor(factory, agentId = 'eng', options = {}) {
     this.factory = factory;
     this.agentId = agentId;
     this.activeAgents = new Map(); // taskId → agentSessionKey
+    this.defaultTimeoutMs = options.defaultTimeoutMs || 5 * 60 * 1000;
+    this.simulatedWorkMs = options.simulatedWorkMs || 5000;
   }
 
   /**
@@ -79,20 +81,37 @@ Begin now.
    * @param {number} timeoutMs - max wait time
    * @returns {Promise<Object>} - agent result
    */
-  async waitForAgent(agentSessionKey, timeoutMs = 300000) {
+  async waitForAgent(agentSessionKey, timeoutMs = this.defaultTimeoutMs) {
     console.log(`[AgentIntegration] Waiting for agent ${agentSessionKey}...`);
 
     // In a real implementation, this would poll sessions_history
-    // For now, we'll simulate a successful completion
+    // For now, we'll simulate completion while still honoring the timeout.
     return new Promise((resolve) => {
-      setTimeout(() => {
+      let settled = false;
+
+      const completeTimer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutTimer);
         resolve({
           agentSessionKey,
           status: 'completed',
           output: 'Agent completed task successfully',
           completedAt: new Date().toISOString()
         });
-      }, 5000); // Simulate 5s agent work
+      }, this.simulatedWorkMs);
+
+      const timeoutTimer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(completeTimer);
+        resolve({
+          agentSessionKey,
+          status: 'timeout',
+          error: `Agent wait exceeded timeout (${timeoutMs}ms)`,
+          timedOutAt: new Date().toISOString()
+        });
+      }, timeoutMs);
     });
   }
 

@@ -1,0 +1,242 @@
+name: ci-self-heal
+
+on:
+  workflow_call:
+    inputs:
+      target_run_id:
+        description: "Workflow run ID to inspect and remediate"
+        required: true
+        type: string
+      max_retry_attempts:
+        description: "Maximum run attempt before escalation"
+        required: false
+        default: 2
+        type: number
+      retry_on_failure:
+        description: "Retry generic failed jobs in addition to timed_out/cancelled"
+        required: false
+        default: false
+        type: boolean
+      escalation_assignee:
+        description: "GitHub username assigned when retries are exhausted"
+        required: false
+        default: ""
+        type: string
+      escalation_labels:
+        description: "Comma-separated labels for escalation issue"
+        required: false
+        default: "ci,self-heal"
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: ci-self-heal-${{ github.repository }}-${{ inputs.target_run_id }}
+  cancel-in-progress: false
+
+jobs:
+  classify-and-remediate:
+    runs-on: ubuntu-latest
+    outputs:
+      remediation_status: ${{ steps.decide.outputs.remediation_status }}
+      classification: ${{ steps.classify.outputs.classification }}
+      failed_jobs: ${{ steps.classify.outputs.failed_jobs }}
+      target_attempt: ${{ steps.inspect.outputs.target_attempt }}
+      escalation_issue_url: ${{ steps.escalate.outputs.escalation_issue_url }}
+    steps:
+      - name: Inspect target run
+        id: inspect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_RUN_ID: ${{ inputs.target_run_id }}
+        run: |
+          set -euo pipefail
+
+          run_json="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}")"
+
+          target_attempt="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("run_attempt", 0))' <<<"${run_json}")"
+          target_status="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", ""))' <<<"${run_json}")"
+          target_conclusion="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("conclusion", ""))' <<<"${run_json}")"
+
+          {
+            echo "target_attempt=${target_attempt}"
+            echo "target_status=${target_status}"
+            echo "target_conclusion=${target_conclusion}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Classify failed jobs
+        id: classify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_RUN_ID: ${{ inputs.target_run_id }}
+          RETRY_ON_FAILURE: ${{ inputs.retry_on_failure }}
+        run: |
+          set -euo pipefail
+
+          jobs_json="$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?per_page=100")"
+
+          export JOBS_JSON="${jobs_json}"
+          python3 - <<'PY' > classification.env
+import json
+import os
+
+jobs = json.loads(os.environ["JOBS_JSON"]).get("jobs", [])
+failed = [j for j in jobs if j.get("conclusion") in {"failure", "timed_out", "cancelled"}]
+
+if not failed:
+    print("classification=no_failed_jobs")
+    print("failed_jobs=[]")
+    raise SystemExit(0)
+
+conclusions = {j.get("conclusion") for j in failed}
+if conclusions.issubset({"timed_out", "cancelled"}):
+    classification = "transient"
+elif os.environ.get("RETRY_ON_FAILURE", "false").lower() == "true":
+    classification = "retryable_failure"
+else:
+    classification = "hard_failure"
+
+failed_jobs = [j.get("name", "unknown") for j in failed]
+print(f"classification={classification}")
+print(f"failed_jobs={json.dumps(failed_jobs)}")
+PY
+
+          cat classification.env >> "$GITHUB_OUTPUT"
+
+      - name: Rerun failed jobs
+        id: rerun
+        if: |
+          (steps.classify.outputs.classification == 'transient' ||
+           steps.classify.outputs.classification == 'retryable_failure') &&
+          fromJSON(steps.inspect.outputs.target_attempt) < inputs.max_retry_attempts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_RUN_ID: ${{ inputs.target_run_id }}
+        run: |
+          set -euo pipefail
+
+          gh api \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/rerun-failed-jobs"
+
+          echo "rerun_dispatched=true" >> "$GITHUB_OUTPUT"
+
+      - name: Escalate to human owner
+        id: escalate
+        if: |
+          steps.classify.outputs.classification == 'hard_failure' ||
+          ((steps.classify.outputs.classification == 'transient' ||
+            steps.classify.outputs.classification == 'retryable_failure') &&
+            fromJSON(steps.inspect.outputs.target_attempt) >= inputs.max_retry_attempts)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_RUN_ID: ${{ inputs.target_run_id }}
+          TARGET_ATTEMPT: ${{ steps.inspect.outputs.target_attempt }}
+          CLASSIFICATION: ${{ steps.classify.outputs.classification }}
+          FAILED_JOBS: ${{ steps.classify.outputs.failed_jobs }}
+          ESCALATION_ASSIGNEE: ${{ inputs.escalation_assignee }}
+          ESCALATION_LABELS: ${{ inputs.escalation_labels }}
+          MAX_RETRIES: ${{ inputs.max_retry_attempts }}
+        run: |
+          set -euo pipefail
+
+          issue_title="[CI Self-Heal] Escalation for run ${TARGET_RUN_ID}"
+          issue_body=$(cat <<EOF
+CI self-healing was unable to auto-remediate this run.
+
+- Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}
+- Classification: ${CLASSIFICATION}
+- Failed jobs: ${FAILED_JOBS}
+- Run attempt observed: ${TARGET_ATTEMPT}
+- Max retries configured: ${MAX_RETRIES}
+
+Please take ownership, identify root cause, and patch workflow/test logic.
+EOF
+)
+
+          args=(--title "$issue_title" --body "$issue_body")
+
+          if [ -n "${ESCALATION_ASSIGNEE}" ]; then
+            args+=(--assignee "${ESCALATION_ASSIGNEE}")
+          fi
+
+          if [ -n "${ESCALATION_LABELS}" ]; then
+            IFS=',' read -r -a labels <<< "${ESCALATION_LABELS}"
+            for label in "${labels[@]}"; do
+              trimmed="$(echo "$label" | xargs)"
+              if [ -n "$trimmed" ]; then
+                args+=(--label "$trimmed")
+              fi
+            done
+          fi
+
+          issue_url="$(gh issue create "${args[@]}")"
+          echo "escalation_issue_url=${issue_url}" >> "$GITHUB_OUTPUT"
+
+      - name: Decide remediation status
+        id: decide
+        env:
+          CLASSIFICATION: ${{ steps.classify.outputs.classification }}
+          RERUN_DISPATCHED: ${{ steps.rerun.outputs.rerun_dispatched }}
+          ESCALATION_ISSUE_URL: ${{ steps.escalate.outputs.escalation_issue_url }}
+        run: |
+          set -euo pipefail
+
+          if [ "${RERUN_DISPATCHED:-false}" = "true" ]; then
+            remediation_status="rerun_dispatched"
+          elif [ -n "${ESCALATION_ISSUE_URL:-}" ]; then
+            remediation_status="escalated"
+          elif [ "${CLASSIFICATION}" = "no_failed_jobs" ]; then
+            remediation_status="no_action"
+          else
+            remediation_status="no_action"
+          fi
+
+          echo "remediation_status=${remediation_status}" >> "$GITHUB_OUTPUT"
+
+      - name: Emit remediation metadata
+        env:
+          TARGET_RUN_ID: ${{ inputs.target_run_id }}
+          TARGET_ATTEMPT: ${{ steps.inspect.outputs.target_attempt }}
+          CLASSIFICATION: ${{ steps.classify.outputs.classification }}
+          FAILED_JOBS: ${{ steps.classify.outputs.failed_jobs }}
+          REMEDIATION_STATUS: ${{ steps.decide.outputs.remediation_status }}
+          ESCALATION_ISSUE_URL: ${{ steps.escalate.outputs.escalation_issue_url }}
+          MAX_RETRIES: ${{ inputs.max_retry_attempts }}
+        run: |
+          set -euo pipefail
+
+          export TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          python3 - <<'PY' > remediation-metadata.json
+import json
+import os
+
+payload = {
+    "ts": os.environ["TIMESTAMP"],
+    "repository": os.environ["GITHUB_REPOSITORY"],
+    "target_run_id": os.environ["TARGET_RUN_ID"],
+    "target_attempt": int(float(os.environ["TARGET_ATTEMPT"])),
+    "max_retry_attempts": int(float(os.environ["MAX_RETRIES"])),
+    "classification": os.environ["CLASSIFICATION"],
+    "failed_jobs": json.loads(os.environ.get("FAILED_JOBS", "[]")),
+    "remediation_status": os.environ["REMEDIATION_STATUS"],
+    "escalation_issue_url": os.environ.get("ESCALATION_ISSUE_URL", "") or None,
+}
+print(json.dumps(payload, sort_keys=True))
+PY
+
+          {
+            echo "### CI Self-Heal Metadata"
+            echo
+            echo '```json'
+            cat remediation-metadata.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

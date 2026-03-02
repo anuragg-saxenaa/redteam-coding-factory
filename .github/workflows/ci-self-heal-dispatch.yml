@@ -1,0 +1,60 @@
+name: ci-self-heal-dispatch
+
+on:
+  workflow_run:
+    workflows:
+      - coding-factory-pipeline
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      target_run_id:
+        description: "Workflow run ID to remediate"
+        required: true
+        type: string
+      max_retry_attempts:
+        description: "Maximum retry attempts before escalation"
+        required: false
+        default: "2"
+        type: string
+      retry_on_failure:
+        description: "Retry generic failed jobs"
+        required: false
+        default: false
+        type: boolean
+      escalation_assignee:
+        description: "GitHub username assigned when escalation occurs"
+        required: false
+        default: ""
+        type: string
+      escalation_labels:
+        description: "Comma-separated labels for escalation issue"
+        required: false
+        default: "ci,self-heal"
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+jobs:
+  auto-remediate-on-failure:
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' }}
+    uses: ./.github/workflows/ci-self-heal.yml
+    with:
+      target_run_id: ${{ github.event.workflow_run.id }}
+      max_retry_attempts: 2
+      retry_on_failure: false
+      escalation_assignee: ""
+      escalation_labels: "ci,self-heal"
+
+  manual-remediate:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    uses: ./.github/workflows/ci-self-heal.yml
+    with:
+      target_run_id: ${{ inputs.target_run_id }}
+      max_retry_attempts: ${{ fromJSON(inputs.max_retry_attempts) }}
+      retry_on_failure: ${{ inputs.retry_on_failure }}
+      escalation_assignee: ${{ inputs.escalation_assignee }}
+      escalation_labels: ${{ inputs.escalation_labels }}

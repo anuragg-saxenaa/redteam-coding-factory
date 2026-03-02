@@ -1,0 +1,9 @@
+{
+  "windowDays": 14,
+  "includeDraftReviews": false,
+  "requireOnNewPush": true,
+  "minSampleSize": 20,
+  "minSnr": 1.0,
+  "minAdoptionRatePct": 40,
+  "maxIgnoredRatePct": 35
+}

@@ -94,6 +94,9 @@ class IssueWatcher {
       maxRetryBudget: this.maxRetryBudget,
       maxRemediationAttempts: config.maxRemediationAttempts || 1,
     });
+
+    // Keep agent wait timeout aligned with watcher-level timeout configuration.
+    this.factory.agentIntegration.defaultTimeoutMs = this.agentTimeoutMs;
   }
 
   /**

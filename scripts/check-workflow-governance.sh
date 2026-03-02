@@ -34,6 +34,11 @@ for workflow in "$WORKFLOW_DIR"/*.yml "$WORKFLOW_DIR"/*.yaml; do
     action="${uses_line#*uses: }"
     action="${action%@*}"
 
+    if [[ "$action" == ./.github/workflows/* ]]; then
+      # Local reusable workflows are versioned in-repo, so SHA pinning is not applicable.
+      continue
+    fi
+
     if [[ ! "$action" =~ $ALLOWED_ACTIONS_REGEX ]]; then
       echo "  ERROR: action not allowlisted: $action"
       status=1

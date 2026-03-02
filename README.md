@@ -16,6 +16,9 @@ redteam-factory run --config factory.config.json
 # Run with config + custom tasks
 redteam-factory run --config factory.config.json --tasks tasks.json
 
+# Validate and preview task normalization
+redteam-factory tasks --config factory.config.json --tasks tasks.json
+
 # Show help
 redteam-factory --help
 ```
@@ -154,6 +157,21 @@ SWE-bench Verified is the canonical capability metric for this factory.
 - Standard report template: [ops/templates/swe-bench-verified-report.md](./ops/templates/swe-bench-verified-report.md)
 
 Runtime metrics (`dataDir/metrics.json`) are operational health signals, not benchmark scorecards.
+
+
+## LLM Test Governance Gate
+
+CI enforces governance checks for LLM-generated tests before merge:
+
+- Golden dataset must not regress (`baseline-report.json` vs `candidate-report.json`)
+- Candidate flake rate must stay below policy threshold
+- Candidate line coverage must not regress vs baseline
+
+Reference files:
+- Policy: `ops/llm-governance/policy.json`
+- Baseline report: `ops/llm-governance/baseline-report.json`
+- Candidate report: `ops/llm-governance/candidate-report.json`
+- Check script: `scripts/check-llm-test-governance.sh`
 
 ## Safety Rails
 

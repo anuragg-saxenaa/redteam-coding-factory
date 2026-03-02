@@ -1,6 +1,6 @@
 /**
  * Worktree Manager — create/manage isolated git worktrees per task
- * Phase 1: Simple worktree lifecycle (create, use, cleanup)
+ * Phase 1 hardening: metadata persistence + git-backed stale cleanup.
  */
 
 const fs = require('fs');
@@ -12,67 +12,91 @@ class WorktreeManager {
   constructor(baseRepo, worktreeRoot = './worktrees') {
     this.baseRepo = baseRepo; // path to main repo
     this.worktreeRoot = worktreeRoot;
-    this.worktrees = new Map(); // id → { id, taskId, path, branch, createdAt, status }
+    this.metaPath = path.join(this.worktreeRoot, '.meta.jsonl');
+    this.worktrees = new Map(); // id -> { id, taskId, path, branch, createdAt, status, removedAt? }
     this.loadWorktrees();
   }
 
   /**
-   * Create a new worktree for a task
+   * Create a new worktree for a task.
    * @param {string} taskId - task UUID
    * @param {string} branch - branch name (default: main)
-   * @returns {Object} - { id, path, branch, createdAt }
+   * @returns {Object} - worktree record
    */
   create(taskId, branch = 'main') {
     const id = uuidv4();
     const worktreePath = path.join(this.worktreeRoot, id);
+    this.ensureWorktreeRoot();
 
-    // Ensure worktree root exists
-    if (!fs.existsSync(this.worktreeRoot)) {
-      fs.mkdirSync(this.worktreeRoot, { recursive: true });
-    }
-
+    let resolvedBranch = branch;
     try {
-      // Create worktree from base repo
       execFileSync('git', ['-C', this.baseRepo, 'worktree', 'add', worktreePath, branch], {
         stdio: 'pipe',
       });
-
-      const record = {
-        id,
-        taskId,
-        path: worktreePath,
-        branch,
-        createdAt: new Date().toISOString(),
-        status: 'active',
-      };
-
-      this.worktrees.set(id, record);
-      this.persistWorktrees();
-      return record;
     } catch (error) {
-      throw new Error(`Failed to create worktree: ${error.message}`);
+      const stderr = (error && error.stderr ? error.stderr.toString() : '') || '';
+      const alreadyCheckedOut =
+        stderr.includes('is already checked out at') ||
+        stderr.includes('is already used by worktree at');
+
+      if (!alreadyCheckedOut) {
+        throw new Error(`Failed to create worktree: ${error.message}`);
+      }
+
+      // If the base branch is already checked out elsewhere, create an isolated
+      // task branch from it so the worktree can still be created safely.
+      resolvedBranch = this.buildTaskBranch(branch, taskId);
+      try {
+        execFileSync(
+          'git',
+          ['-C', this.baseRepo, 'worktree', 'add', '-b', resolvedBranch, worktreePath, branch],
+          { stdio: 'pipe' }
+        );
+      } catch (fallbackError) {
+        throw new Error(`Failed to create worktree: ${fallbackError.message}`);
+      }
     }
+
+    const record = {
+      id,
+      taskId,
+      path: worktreePath,
+      branch: resolvedBranch,
+      baseBranch: branch,
+      createdAt: new Date().toISOString(),
+      status: 'active',
+    };
+
+    this.worktrees.set(id, record);
+    this.persistWorktrees();
+    return record;
+  }
+
+
+  buildTaskBranch(baseBranch, taskId) {
+    const safeTaskId = String(taskId).toLowerCase().replace(/[^a-z0-9._-]/g, '-');
+    return `factory/${baseBranch}/${safeTaskId}`;
   }
 
   /**
-   * Get worktree by id
+   * Get worktree by id.
    */
   get(id) {
     return this.worktrees.get(id);
   }
 
   /**
-   * Get worktree by taskId
+   * Get active worktree by taskId.
    */
   getByTaskId(taskId) {
     for (const wt of this.worktrees.values()) {
-      if (wt.taskId === taskId) return wt;
+      if (wt.taskId === taskId && wt.status === 'active') return wt;
     }
     return null;
   }
 
   /**
-   * Remove a worktree (cleanup)
+   * Remove a worktree (cleanup).
    */
   remove(id) {
     const wt = this.worktrees.get(id);
@@ -83,6 +107,7 @@ class WorktreeManager {
         stdio: 'pipe',
       });
       wt.status = 'removed';
+      wt.removedAt = new Date().toISOString();
       this.persistWorktrees();
     } catch (error) {
       throw new Error(`Failed to remove worktree: ${error.message}`);
@@ -90,10 +115,10 @@ class WorktreeManager {
   }
 
   /**
-   * List all worktrees
+   * List all tracked worktrees.
    */
   list(filter = {}) {
-    return Array.from(this.worktrees.values()).filter(wt => {
+    return Array.from(this.worktrees.values()).filter((wt) => {
       if (filter.status && wt.status !== filter.status) return false;
       if (filter.taskId && wt.taskId !== filter.taskId) return false;
       return true;
@@ -101,25 +126,87 @@ class WorktreeManager {
   }
 
   /**
-   * Persist worktrees to disk
+   * Query git for authoritative worktree registration.
+   * Returns absolute worktree paths that git currently knows about.
    */
-  persistWorktrees() {
-    const dir = path.dirname(this.worktreeRoot);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const metaPath = path.join(this.worktreeRoot, '.meta.jsonl');
-    const lines = Array.from(this.worktrees.values()).map(wt => JSON.stringify(wt));
-    fs.writeFileSync(metaPath, lines.join('\n') + '\n');
+  listFromGit() {
+    const output = execFileSync('git', ['-C', this.baseRepo, 'worktree', 'list', '--porcelain'], {
+      stdio: 'pipe',
+    }).toString();
+
+    const lines = output.split('\n');
+    const paths = new Set();
+    for (const line of lines) {
+      if (!line.startsWith('worktree ')) continue;
+      const worktreePath = line.slice('worktree '.length).trim();
+      if (worktreePath) paths.add(path.resolve(worktreePath));
+    }
+    return paths;
   }
 
   /**
-   * Load worktrees from disk
+   * Reconcile tracked records against git worktree registration.
+   * Marks missing active entries as stale and prunes stale directories.
+   */
+  cleanupStale() {
+    const gitPaths = this.listFromGit();
+    const repoMainPath = path.resolve(this.baseRepo);
+    const rootPath = path.resolve(this.worktreeRoot);
+
+    let staleMarked = 0;
+    let dirsPruned = 0;
+
+    for (const wt of this.worktrees.values()) {
+      if (wt.status !== 'active') continue;
+      const trackedPath = path.resolve(wt.path);
+      if (gitPaths.has(trackedPath)) continue;
+
+      wt.status = 'stale';
+      wt.removedAt = new Date().toISOString();
+      staleMarked += 1;
+
+      const canPrune =
+        trackedPath.startsWith(rootPath + path.sep) &&
+        trackedPath !== repoMainPath &&
+        fs.existsSync(trackedPath);
+      if (canPrune) {
+        fs.rmSync(trackedPath, { recursive: true, force: true });
+        dirsPruned += 1;
+      }
+    }
+
+    if (staleMarked > 0) {
+      this.persistWorktrees();
+    }
+
+    return { staleMarked, dirsPruned };
+  }
+
+  ensureWorktreeRoot() {
+    if (!fs.existsSync(this.worktreeRoot)) {
+      fs.mkdirSync(this.worktreeRoot, { recursive: true });
+    }
+  }
+
+  /**
+   * Persist worktrees to disk.
+   */
+  persistWorktrees() {
+    this.ensureWorktreeRoot();
+    const lines = Array.from(this.worktrees.values()).map((wt) => JSON.stringify(wt));
+    fs.writeFileSync(this.metaPath, lines.join('\n') + '\n');
+  }
+
+  /**
+   * Load worktrees from disk.
    */
   loadWorktrees() {
-    const metaPath = path.join(this.worktreeRoot, '.meta.jsonl');
-    if (!fs.existsSync(metaPath)) return;
-    const content = fs.readFileSync(metaPath, 'utf8');
-    const lines = content.trim().split('\n').filter(l => l);
-    lines.forEach(line => {
+    if (!fs.existsSync(this.metaPath)) return;
+    const content = fs.readFileSync(this.metaPath, 'utf8').trim();
+    if (!content) return;
+
+    const lines = content.split('\n').filter((l) => l);
+    lines.forEach((line) => {
       try {
         const wt = JSON.parse(line);
         this.worktrees.set(wt.id, wt);

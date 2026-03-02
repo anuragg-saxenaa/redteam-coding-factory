@@ -24,6 +24,7 @@ assert(classifyFailure('ECONNREFUSED')          === 'NETWORK_ERROR',    'ECONNRE
 assert(classifyFailure('ETIMEDOUT')             === 'TIMEOUT',          'ETIMEDOUT → TIMEOUT');
 assert(classifyFailure('lock file exists')      === 'LOCK_CONTENTION',  'lock → LOCK_CONTENTION');
 assert(classifyFailure('eslint no-unused-vars') === 'LINT_ERROR',       'eslint → LINT_ERROR');
+assert(classifyFailure("npm ERR! Missing script: \"lint\"") === 'LINT_ERROR', 'missing lint script → LINT_ERROR');
 assert(classifyFailure('AssertionError: expect') === 'TEST_FAILURE',    'assertion → TEST_FAILURE');
 assert(classifyFailure('SyntaxError: unexpected token') === 'BUILD_ERROR', 'SyntaxError → BUILD_ERROR');
 assert(classifyFailure('completely unrelated error') === 'UNKNOWN',     'unknown → UNKNOWN');

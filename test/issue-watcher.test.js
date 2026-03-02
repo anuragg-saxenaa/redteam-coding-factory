@@ -64,6 +64,7 @@ console.log('Test 2: Custom construction');
   ok(watcher.createPR === true, 'PR enabled');
   ok(watcher.autoClose === true, 'autoClose enabled');
   ok(watcher.agentName === 'claude', 'custom agent');
+  ok(watcher.factory.agentIntegration.defaultTimeoutMs === 10 * 60 * 1000, 'agent timeout propagated to integration');
 }
 
 // --- Test 3: Stats tracking ---

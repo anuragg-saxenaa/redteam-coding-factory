@@ -1,0 +1,11 @@
+{
+  "goldenCases": [
+    { "id": "golden-001", "passed": true },
+    { "id": "golden-002", "passed": true },
+    { "id": "golden-003", "passed": true }
+  ],
+  "flakeRatePct": 1,
+  "coverage": {
+    "linePct": 86.5
+  }
+}

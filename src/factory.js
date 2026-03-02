@@ -172,7 +172,12 @@ class CodingFactory {
     } catch (error) {
       console.error(`[Factory] Error processing task ${task.id}:`, error.message);
       this.taskManager.fail(task.id, error.message);
-      return null;
+      return {
+        taskId: task.id,
+        status: 'failed',
+        failed: true,
+        error: error.message,
+      };
     }
   }
 

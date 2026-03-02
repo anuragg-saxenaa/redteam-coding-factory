@@ -23,6 +23,7 @@ class MultiRepoOrchestrator {
     this.baseDelayMs = config.baseDelayMs ?? 200;
     this.maxDelayMs = config.maxDelayMs ?? 4000;
     this.isRunning = false;
+    this.repoBranches = new Map();
 
     this._initializeFactories();
   }
@@ -48,6 +49,7 @@ class MultiRepoOrchestrator {
       };
       const factory = new CodingFactory(factoryConfig);
       this.factories.set(repo.name, factory);
+      this.repoBranches.set(repo.name, repo.branch || 'main');
       console.log(`[MultiRepoOrchestrator] Initialized factory for repo: ${repo.name}`);
     }
   }
@@ -73,6 +75,7 @@ class MultiRepoOrchestrator {
     };
     const factory = new CodingFactory(factoryConfig);
     this.factories.set(name, factory);
+    this.repoBranches.set(name, branch || 'main');
     console.log(`[MultiRepoOrchestrator] Registered repo: ${name}`);
   }
 
@@ -164,14 +167,37 @@ class MultiRepoOrchestrator {
     if (!factory) throw new Error(`Repo ${repoName} not found`);
 
     console.log(`[MultiRepoOrchestrator] Processing task ${taskId} in repo ${repoName}`);
-    const result = await factory.processNext(false, false);
+    try {
+      const result = await factory.processNext(false, false);
+      const normalized = result || {
+        taskId,
+        status: 'failed',
+        failed: true,
+        error: 'processNext returned no result',
+      };
 
-    if (result) {
-      this.results.set(taskId, result);
-      console.log(`[MultiRepoOrchestrator] Task ${taskId} completed in ${repoName}`);
+      const status = normalized.status || (normalized.failed ? 'failed' : 'completed');
+      this.results.set(taskId, { ...normalized, status, repoName });
+
+      if (status === 'completed') {
+        console.log(`[MultiRepoOrchestrator] Task ${taskId} completed in ${repoName}`);
+      } else {
+        console.log(`[MultiRepoOrchestrator] Task ${taskId} failed in ${repoName}`);
+      }
+
+      return normalized;
+    } catch (error) {
+      const failedResult = {
+        taskId,
+        status: 'failed',
+        failed: true,
+        error: error.message,
+        repoName,
+      };
+      this.results.set(taskId, failedResult);
+      console.error(`[MultiRepoOrchestrator] Task ${taskId} errored in ${repoName}: ${error.message}`);
+      return failedResult;
     }
-
-    return result;
   }
 
   /**
@@ -195,7 +221,7 @@ class MultiRepoOrchestrator {
         title: task.title,
         description: `${task.description}\n\nChanges for ${repoSpec.name}: ${JSON.stringify(repoSpec.changes)}`,
         repo: factory.baseRepo,
-        branch: 'main',
+        branch: this.repoBranches.get(repoSpec.name) || 'main',
       };
 
       const record = factory.submitTask(repoTask);
@@ -242,7 +268,7 @@ class MultiRepoOrchestrator {
     const summary = {
       totalTasks: this.results.size,
       completed: Array.from(this.results.values()).filter(r => r.status === 'completed').length,
-      failed: Array.from(this.results.values()).filter(r => r.status === 'failed').length,
+      failed: Array.from(this.results.values()).filter(r => r.status === 'failed' || r.status === 'partial').length,
       results: Array.from(this.results.entries()).map(([id, result]) => ({ id, ...result })),
     };
     return summary;

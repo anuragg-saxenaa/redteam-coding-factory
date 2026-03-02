@@ -36,6 +36,15 @@ class CodeExecutor {
     };
   }
 
+  _formatExecError(error) {
+    const stdout = error && error.stdout ? error.stdout.toString() : '';
+    const stderr = error && error.stderr ? error.stderr.toString() : '';
+    const parts = [error && error.message ? error.message : '', stderr, stdout]
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+    return parts.substring(0, 500);
+  }
 
   _buildDefaultRemediationPlan(stageName, classification, result, attempt, context) {
     const scope = context.scope || { type: 'minimal', files: [], risk: 'high' };
@@ -92,7 +101,7 @@ class CodeExecutor {
     } catch (error) {
       return {
         success: false,
-        error: error.message.substring(0, 500),
+        error: this._formatExecError(error),
       };
     }
   }
@@ -212,7 +221,7 @@ class CodeExecutor {
     } catch (error) {
       return {
         success: false,
-        error: error.message.substring(0, 500)
+        error: this._formatExecError(error)
       };
     }
   }
@@ -234,7 +243,7 @@ class CodeExecutor {
     } catch (error) {
       return {
         success: false,
-        error: error.message.substring(0, 500)
+        error: this._formatExecError(error)
       };
     }
   }
@@ -272,7 +281,7 @@ class CodeExecutor {
     } catch (error) {
       return {
         success: false,
-        error: error.message.substring(0, 500)
+        error: this._formatExecError(error)
       };
     }
   }

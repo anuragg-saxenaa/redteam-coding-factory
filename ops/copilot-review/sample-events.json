@@ -1,0 +1,30 @@
+[
+  {
+    "prNumber": 101,
+    "submittedAt": "2026-02-20T12:00:00Z",
+    "isDraft": false,
+    "onNewPush": true,
+    "outcome": "accepted"
+  },
+  {
+    "prNumber": 102,
+    "submittedAt": "2026-02-20T13:00:00Z",
+    "isDraft": false,
+    "onNewPush": true,
+    "outcome": "partially_accepted"
+  },
+  {
+    "prNumber": 103,
+    "submittedAt": "2026-02-20T14:00:00Z",
+    "isDraft": false,
+    "onNewPush": true,
+    "outcome": "rejected"
+  },
+  {
+    "prNumber": 104,
+    "submittedAt": "2026-02-20T15:00:00Z",
+    "isDraft": false,
+    "onNewPush": true,
+    "outcome": "ignored"
+  }
+]

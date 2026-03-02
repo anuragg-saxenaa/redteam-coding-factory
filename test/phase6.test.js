@@ -205,6 +205,37 @@ async function test5_AutonomousLoop() {
   console.log(`✓ Test 5 passed: autonomous loop processed ${results.totalTasks} tasks`);
 }
 
+
+async function test6_FailureAccountingWhenProcessReturnsNull() {
+  console.log('\n### Test 6: Failure Accounting on Null Process Result ###');
+  const orchestrator = new MultiRepoOrchestrator({
+    repos: [
+      { name: 'repo1', path: REPO_1_BARE, branch: 'main' }
+    ],
+    dataDir: DATA_DIR
+  });
+
+  const factory = orchestrator.getFactory('repo1');
+  factory.processNext = async () => null;
+
+  orchestrator.submitTask('repo1', {
+    title: 'Repo 1 Forced Failure Task',
+    description: 'Force processNext to return null',
+    repo: REPO_1_BARE,
+    branch: 'main'
+  });
+
+  const results = await orchestrator.startAutonomousLoop();
+  if (results.totalTasks !== 1) {
+    throw new Error(`Expected 1 task recorded, got ${results.totalTasks}`);
+  }
+  if (results.failed !== 1) {
+    throw new Error(`Expected 1 failed task recorded, got ${results.failed}`);
+  }
+
+  console.log('✓ Test 6 passed: null processNext result is surfaced as failed task');
+}
+
 async function main() {
   setupTestRepos();
 
@@ -214,6 +245,7 @@ async function main() {
     await test3_CrossRepoTask();
     await test4_DependencyTracking();
     await test5_AutonomousLoop();
+    await test6_FailureAccountingWhenProcessReturnsNull();
 
     console.log('\n=== ALL PHASE 6 TESTS PASSED ===\n');
     console.log('Phase 6 verified:');

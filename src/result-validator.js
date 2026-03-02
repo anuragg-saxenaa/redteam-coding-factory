@@ -24,15 +24,24 @@ class ResultValidator {
     const rules = this.validationRules[validationMode] || this.validationRules.default;
     const errors = [];
     const artifacts = [];
+    const steps = Array.isArray(executionResult?.steps) ? executionResult.steps : [];
+    let blockedBy = null;
+    const suppressed = [];
 
     console.log(`[Validator] Validating task ${task.id} with mode: ${validationMode}`);
 
-    // Check each validation rule
+    // Validate stages in order. If a mandatory stage fails/missing, suppress downstream checks.
     for (const rule of rules) {
-      const step = executionResult.steps.find(s => s.name === rule);
-      
+      if (blockedBy) {
+        suppressed.push(rule);
+        continue;
+      }
+
+      const step = steps.find(s => s.name === rule);
+
       if (!step) {
         errors.push(`Missing validation step: ${rule}`);
+        blockedBy = rule;
         continue;
       }
 
@@ -43,7 +52,16 @@ class ResultValidator {
           step: rule,
           content: step.error
         });
+        blockedBy = rule;
       }
+    }
+
+    if (blockedBy && suppressed.length > 0) {
+      artifacts.push({
+        type: 'validation_short_circuit',
+        step: blockedBy,
+        content: `Skipped downstream validation checks: ${suppressed.join(', ')}`
+      });
     }
 
     const valid = errors.length === 0;
