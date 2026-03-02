@@ -57,6 +57,15 @@ class WorktreeManager {
       }
     }
 
+    // Configure git identity in worktree (required for commits in CI)
+    try {
+      execFileSync('git', ['-C', worktreePath, 'config', 'user.email', 'test@example.com'], { stdio: 'pipe' });
+      execFileSync('git', ['-C', worktreePath, 'config', 'user.name', 'Test User'], { stdio: 'pipe' });
+    } catch (configError) {
+      // Non-fatal: log but continue
+      console.warn(`Failed to configure git identity in worktree: ${configError.message}`);
+    }
+
     const record = {
       id,
       taskId,
