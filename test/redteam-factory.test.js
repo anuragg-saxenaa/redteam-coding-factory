@@ -32,6 +32,7 @@ function setupTestRepo() {
   execSync(`git clone ${REPO_1_BARE} ${REPO_1_WORK}`);
   execSync(`git -C ${REPO_1_WORK} config user.email "test@example.com"`);
   execSync(`git -C ${REPO_1_WORK} config user.name "Test User"`);
+  execSync(`git -C ${REPO_1_WORK} config init.defaultBranch main`);
   fs.writeFileSync(path.join(REPO_1_WORK, 'README.md'), '# RedTeam Repo 1\n');
   fs.writeFileSync(path.join(REPO_1_WORK, 'package.json'), JSON.stringify({
     name: "redteam-repo-1",
@@ -40,6 +41,7 @@ function setupTestRepo() {
   }, null, 2));
   execSync(`git -C ${REPO_1_WORK} add .`);
   execSync(`git -C ${REPO_1_WORK} commit -m "Initial commit"`);
+  execSync(`git -C ${REPO_1_WORK} branch -M main`);
   execSync(`git -C ${REPO_1_WORK} push origin main`);
 
   console.log('✓ RedTeamFactory test environment setup complete');
