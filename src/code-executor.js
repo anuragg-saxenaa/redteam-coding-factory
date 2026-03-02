@@ -279,9 +279,11 @@ class CodeExecutor {
         output: 'Changes committed'
       };
     } catch (error) {
+      const formattedError = this._formatExecError(error);
+      console.error(`[Executor] runCommit failed: ${formattedError}`);
       return {
         success: false,
-        error: this._formatExecError(error)
+        error: formattedError
       };
     }
   }
