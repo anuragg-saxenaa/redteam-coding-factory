@@ -36,6 +36,7 @@ function setupRepo() {
 
   fs.writeFileSync(path.join(work, 'lint.sh'), '#!/bin/bash\nif [ -f .lint-fixed ]; then echo "lint ok"; exit 0; fi\necho "eslint no-unused-vars"; exit 1\n');
   fs.writeFileSync(path.join(work, 'test.sh'), '#!/bin/bash\necho "tests ok"\nexit 0\n');
+  fs.writeFileSync(path.join(work, 'README.md'), '# Test Repo\n');
   fs.writeFileSync(path.join(work, 'package.json'), JSON.stringify({
     name: 'guarded-remediation-repo',
     version: '1.0.0',
@@ -75,7 +76,7 @@ function cleanup(dir) {
       enableAutoRemediation: true,
       remediationGenerator: () => ({
         scope: { type: 'lint-only', files: ['lint.sh'], risk: 'low' },
-        commands: ['touch .lint-fixed', 'echo "// lint fixed" >> lint.sh'],
+        commands: ['touch .lint-fixed', 'echo "# lint fixed" >> README.md'],
       }),
     });
 
