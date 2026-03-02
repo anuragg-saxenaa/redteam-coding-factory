@@ -37,6 +37,8 @@ function setupRepo() {
   fs.writeFileSync(path.join(work, 'lint.sh'), '#!/bin/bash\nif [ -f .lint-fixed ]; then echo "lint ok"; exit 0; fi\necho "eslint no-unused-vars"; exit 1\n');
   fs.writeFileSync(path.join(work, 'test.sh'), '#!/bin/bash\necho "tests ok"\nexit 0\n');
   fs.writeFileSync(path.join(work, 'README.md'), '# Test Repo\n');
+  fs.writeFileSync(path.join(work, 'src/index.js'), 'console.log("hello");\n');
+  fs.mkdirSync(path.join(work, 'src'), { recursive: true });
   fs.writeFileSync(path.join(work, 'package.json'), JSON.stringify({
     name: 'guarded-remediation-repo',
     version: '1.0.0',
@@ -70,13 +72,16 @@ function cleanup(dir) {
     const wtm = new WorktreeManager(env.bare, path.join(env.root, 'worktrees'));
     const wt = wtm.create('task-1', 'main');
 
+    // Create a real code change in the worktree that needs to be committed
+    fs.writeFileSync(path.join(wt.path, 'src/feature.js'), 'module.exports = { feature: true };\n');
+
     const executor = new CodeExecutor(wtm, {
       maxRetries: 2,
       maxRetryBudget: 4,
       enableAutoRemediation: true,
       remediationGenerator: () => ({
         scope: { type: 'lint-only', files: ['lint.sh'], risk: 'low' },
-        commands: ['touch .lint-fixed', 'echo "# lint fixed" >> README.md'],
+        commands: ['touch .lint-fixed'],
       }),
     });
 
