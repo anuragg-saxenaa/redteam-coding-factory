@@ -36,8 +36,8 @@ function setupTestRepo() {
   console.log(`\n--- Setting up minimal test repository ---`);
   cleanup();
 
-  // Create bare repo
-  execSync(`git init --bare ${TEST_BARE_REPO_PATH}`);
+  // Force main as default branch so CI environments with master defaults don't break pushes.
+  execSync(`git -c init.defaultBranch=main init --bare ${TEST_BARE_REPO_PATH}`);
   execSync(`git clone ${TEST_BARE_REPO_PATH} ${TEST_REPO_PATH}`);
   execSync(`git -C ${TEST_REPO_PATH} config user.email "test@example.com"`);
   execSync(`git -C ${TEST_REPO_PATH} config user.name "Test User"`);
