@@ -32,6 +32,7 @@ function setupRepo() {
   execSync(`git clone ${bare} ${work}`);
   execSync(`git -C ${work} config user.email "test@example.com"`);
   execSync(`git -C ${work} config user.name "Test User"`);
+  execSync(`git -C ${work} config init.defaultBranch main`);
 
   fs.writeFileSync(path.join(work, 'lint.sh'), '#!/bin/bash\nif [ -f .lint-fixed ]; then echo "lint ok"; exit 0; fi\necho "eslint no-unused-vars"; exit 1\n');
   fs.writeFileSync(path.join(work, 'test.sh'), '#!/bin/bash\necho "tests ok"\nexit 0\n');
@@ -46,6 +47,7 @@ function setupRepo() {
 
   execSync(`git -C ${work} add .`);
   execSync(`git -C ${work} commit -m "init"`);
+  execSync(`git -C ${work} branch -M main`);
   execSync(`git -C ${work} push origin main`);
 
   return { root, bare, work };
