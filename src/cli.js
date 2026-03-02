@@ -33,10 +33,12 @@ function usage(exitCode = 0) {
     'Usage:',
     '  redteam-factory run   --config <factory.config.json> [--tasks <tasks.json>]',
     '  redteam-factory watch --config <factory.config.json>',
+    '  redteam-factory tasks --config <factory.config.json> --tasks <tasks.json>',
     '',
     'Commands:',
     '  run     Run factory with explicit task list, then exit',
     '  watch   Poll GitHub for "factory-ready" issues and process them continuously',
+    '  tasks   Validate and preview normalized tasks JSON, then exit',
     '',
     'Options:',
     '  --config     Path to factory config JSON (required)',
@@ -124,7 +126,7 @@ async function main() {
   if (args.help || args._.length === 0) usage(args.help ? 0 : 1);
 
   const cmd = args._[0];
-  if (cmd !== 'run' && cmd !== 'watch') {
+  if (cmd !== 'run' && cmd !== 'watch' && cmd !== 'tasks') {
     process.stderr.write(`Unknown command: ${cmd}\n\n`);
     usage(1);
   }
@@ -135,6 +137,17 @@ async function main() {
   }
 
   const config = readJson(args.config);
+
+  if (cmd === 'tasks') {
+    if (!args.tasks) {
+      process.stderr.write('Missing required --tasks for tasks command\n\n');
+      usage(1);
+    }
+
+    const tasks = normalizeTasks(readJson(args.tasks), config);
+    process.stdout.write(`\nNormalized ${tasks.length} task(s):\n${JSON.stringify(tasks, null, 2)}\n`);
+    return;
+  }
 
   if (cmd === 'watch') {
     // Watch mode: poll GitHub issues and run through factory
