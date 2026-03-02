@@ -33,6 +33,7 @@ function setupTestRepos() {
   execSync(`git clone ${REPO_1_BARE} ${REPO_1_WORK}`);
   execSync(`git -C ${REPO_1_WORK} config user.email "test@example.com"`);
   execSync(`git -C ${REPO_1_WORK} config user.name "Test User"`);
+  execSync(`git -C ${REPO_1_WORK} config init.defaultBranch main`);
   fs.writeFileSync(path.join(REPO_1_WORK, 'README.md'), '# Repo 1\n');
   fs.writeFileSync(path.join(REPO_1_WORK, 'package.json'), JSON.stringify({
     name: "repo-1",
@@ -41,6 +42,7 @@ function setupTestRepos() {
   }, null, 2));
   execSync(`git -C ${REPO_1_WORK} add .`);
   execSync(`git -C ${REPO_1_WORK} commit -m "Initial commit"`);
+  execSync(`git -C ${REPO_1_WORK} branch -M main`);
   execSync(`git -C ${REPO_1_WORK} push origin main`);
 
   // Create repo 2
@@ -48,6 +50,7 @@ function setupTestRepos() {
   execSync(`git clone ${REPO_2_BARE} ${REPO_2_WORK}`);
   execSync(`git -C ${REPO_2_WORK} config user.email "test@example.com"`);
   execSync(`git -C ${REPO_2_WORK} config user.name "Test User"`);
+  execSync(`git -C ${REPO_2_WORK} config init.defaultBranch main`);
   fs.writeFileSync(path.join(REPO_2_WORK, 'README.md'), '# Repo 2\n');
   fs.writeFileSync(path.join(REPO_2_WORK, 'package.json'), JSON.stringify({
     name: "repo-2",
@@ -56,6 +59,7 @@ function setupTestRepos() {
   }, null, 2));
   execSync(`git -C ${REPO_2_WORK} add .`);
   execSync(`git -C ${REPO_2_WORK} commit -m "Initial commit"`);
+  execSync(`git -C ${REPO_2_WORK} branch -M main`);
   execSync(`git -C ${REPO_2_WORK} push origin main`);
 
   console.log('✓ Multi-repo test environment setup complete');

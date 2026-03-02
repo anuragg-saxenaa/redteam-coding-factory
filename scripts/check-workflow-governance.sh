@@ -52,8 +52,8 @@ for workflow in "$WORKFLOW_DIR"/*.yml "$WORKFLOW_DIR"/*.yaml; do
 done
 
 if [[ $status -ne 0 ]]; then
-  echo "\nWorkflow governance check failed"
+  printf "\nWorkflow governance check failed\n"
   exit $status
 fi
 
-echo "\nWorkflow governance check passed"
+printf "\nWorkflow governance check passed\n"
