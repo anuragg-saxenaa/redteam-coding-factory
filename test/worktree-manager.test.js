@@ -43,7 +43,8 @@ function setupRepo() {
   );
   sh(`git -C ${BASE_CLONE} add .`);
   sh(`git -C ${BASE_CLONE} commit -m "initial"`);
-  sh(`git -C ${BASE_CLONE} push origin main`);
+  sh(`git -C ${BASE_CLONE} checkout -b main`);
+  sh(`git -C ${BASE_CLONE} push -u origin HEAD:main`);
 }
 
 function testCreateListRemovePersist() {
