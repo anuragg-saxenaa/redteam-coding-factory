@@ -83,30 +83,30 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?per_page=100")"
 
           export JOBS_JSON="${jobs_json}"
-          python3 - <<'PY' > classification.env
-import json
-import os
+          python3 - <<'EOF' > classification.env
+          import json
+          import os
 
-jobs = json.loads(os.environ["JOBS_JSON"]).get("jobs", [])
-failed = [j for j in jobs if j.get("conclusion") in {"failure", "timed_out", "cancelled"}]
+          jobs = json.loads(os.environ["JOBS_JSON"]).get("jobs", [])
+          failed = [j for j in jobs if j.get("conclusion") in {"failure", "timed_out", "cancelled"}]
 
-if not failed:
-    print("classification=no_failed_jobs")
-    print("failed_jobs=[]")
-    raise SystemExit(0)
+          if not failed:
+              print("classification=no_failed_jobs")
+              print("failed_jobs=[]")
+              raise SystemExit(0)
 
-conclusions = {j.get("conclusion") for j in failed}
-if conclusions.issubset({"timed_out", "cancelled"}):
-    classification = "transient"
-elif os.environ.get("RETRY_ON_FAILURE", "false").lower() == "true":
-    classification = "retryable_failure"
-else:
-    classification = "hard_failure"
+          conclusions = {j.get("conclusion") for j in failed}
+          if conclusions.issubset({"timed_out", "cancelled"}):
+              classification = "transient"
+          elif os.environ.get("RETRY_ON_FAILURE", "false").lower() == "true":
+              classification = "retryable_failure"
+          else:
+              classification = "hard_failure"
 
-failed_jobs = [j.get("name", "unknown") for j in failed]
-print(f"classification={classification}")
-print(f"failed_jobs={json.dumps(failed_jobs)}")
-PY
+          failed_jobs = [j.get("name", "unknown") for j in failed]
+          print(f"classification={classification}")
+          print(f"failed_jobs={json.dumps(failed_jobs)}")
+          EOF
 
           cat classification.env >> "$GITHUB_OUTPUT"
 
@@ -149,18 +149,18 @@ PY
           set -euo pipefail
 
           issue_title="[CI Self-Heal] Escalation for run ${TARGET_RUN_ID}"
-          issue_body=$(cat <<EOF
-CI self-healing was unable to auto-remediate this run.
+          issue_body=$(cat <<'ISSUE_EOF'
+          CI self-healing was unable to auto-remediate this run.
 
-- Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}
-- Classification: ${CLASSIFICATION}
-- Failed jobs: ${FAILED_JOBS}
-- Run attempt observed: ${TARGET_ATTEMPT}
-- Max retries configured: ${MAX_RETRIES}
+          - Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}
+          - Classification: ${CLASSIFICATION}
+          - Failed jobs: ${FAILED_JOBS}
+          - Run attempt observed: ${TARGET_ATTEMPT}
+          - Max retries configured: ${MAX_RETRIES}
 
-Please take ownership, identify root cause, and patch workflow/test logic.
-EOF
-)
+          Please take ownership, identify root cause, and patch workflow/test logic.
+          ISSUE_EOF
+          )
 
           args=(--title "$issue_title" --body "$issue_body")
 
@@ -214,24 +214,25 @@ EOF
         run: |
           set -euo pipefail
 
-          export TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          python3 - <<'PY' > remediation-metadata.json
-import json
-import os
+          TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          export TIMESTAMP
+          python3 - <<'EOF' > remediation-metadata.json
+          import json
+          import os
 
-payload = {
-    "ts": os.environ["TIMESTAMP"],
-    "repository": os.environ["GITHUB_REPOSITORY"],
-    "target_run_id": os.environ["TARGET_RUN_ID"],
-    "target_attempt": int(float(os.environ["TARGET_ATTEMPT"])),
-    "max_retry_attempts": int(float(os.environ["MAX_RETRIES"])),
-    "classification": os.environ["CLASSIFICATION"],
-    "failed_jobs": json.loads(os.environ.get("FAILED_JOBS", "[]")),
-    "remediation_status": os.environ["REMEDIATION_STATUS"],
-    "escalation_issue_url": os.environ.get("ESCALATION_ISSUE_URL", "") or None,
-}
-print(json.dumps(payload, sort_keys=True))
-PY
+          payload = {
+              "ts": os.environ["TIMESTAMP"],
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "target_run_id": os.environ["TARGET_RUN_ID"],
+              "target_attempt": int(float(os.environ["TARGET_ATTEMPT"])),
+              "max_retry_attempts": int(float(os.environ["MAX_RETRIES"])),
+              "classification": os.environ["CLASSIFICATION"],
+              "failed_jobs": json.loads(os.environ.get("FAILED_JOBS", "[]")),
+              "remediation_status": os.environ["REMEDIATION_STATUS"],
+              "escalation_issue_url": os.environ.get("ESCALATION_ISSUE_URL", "") or None,
+          }
+          print(json.dumps(payload, sort_keys=True))
+          EOF
 
           {
             echo "### CI Self-Heal Metadata"
