@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T22:23:11Z",
+  "updatedAt": "2026-03-05T23:27:05Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -460,6 +460,33 @@
       "type": "bug-risk",
       "status": "open",
       "details": "RedTeamFactory currently builds run IDs with Date.now(), which is less collision-resistant and inconsistent with UUID task/worktree IDs elsewhere. Use UUID-based run identifiers for deterministic traceability across concurrent runs and restarts."
+    },
+    {
+      "id": "CQ-2026-03-05-52",
+      "title": "Quote test fixture shell paths to prevent whitespace/metacharacter breakage",
+      "priority": "medium",
+      "area": "test/integration.test.js, test/phase6.test.js, test/redteam-factory.test.js, test/guarded-auto-remediation.test.js",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "Integration tests build git/rm commands with unquoted interpolated paths (e.g., `rm -rf ${TEST_DIR}`, `git clone ${bare} ${work}`). Paths with spaces or shell metacharacters can break tests and create unsafe behavior. Move to execFile/spawn argv or robust shell escaping helper and add regression cases with space-containing temp paths."
+    },
+    {
+      "id": "CQ-2026-03-05-53",
+      "title": "Extract shared test-repo fixture builder to remove duplicated setup logic",
+      "priority": "low",
+      "area": "test/integration.test.js, test/phase6.test.js, test/redteam-factory.test.js",
+      "type": "refactor",
+      "status": "open",
+      "details": "Multiple integration suites duplicate repo bootstrap/cleanup logic (init bare repo, clone, configure git user, seed package.json). Centralize this into a shared helper to reduce drift, simplify future hardening fixes, and keep test setup deterministic across suites."
+    },
+    {
+      "id": "CQ-2026-03-05-54",
+      "title": "Add performance budget guard for default full test matrix runtime",
+      "priority": "low",
+      "area": "package.json, test/",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Default `npm test` runs a long sequential integration-heavy chain but no runtime budget is tracked. Add a lightweight timing guard/report (per-suite + total) with warning/fail thresholds to detect regression in feedback time as suites grow."
     }
   ]
 }
