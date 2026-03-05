@@ -1,5 +1,51 @@
 {
   "version": 1,
-  "updatedAt": null,
-  "tasks": []
+  "updatedAt": "2026-03-05T13:49:00Z",
+  "tasks": [
+    {
+      "id": "CQ-2026-03-05-01",
+      "title": "Harden worktree fallback branch creation against branch-name collisions",
+      "priority": "high",
+      "area": "src/worktree-manager.js",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "WorktreeManager.create() falls back to `git worktree add -b factory/<base>/<taskId>` when base branch is already checked out. If the same taskId is retried or reused, branch creation can fail with 'branch already exists'. Add collision handling (e.g., existence check + suffixing or -B strategy with safeguards) and tests for repeated task retries."
+    },
+    {
+      "id": "CQ-2026-03-05-02",
+      "title": "Prevent cleanup failures from masking task outcomes",
+      "priority": "high",
+      "area": "src/factory.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "completeTask() and failTask() call worktreeManager.remove() without guarding cleanup errors. If cleanup fails (already removed, lock, path issue), it can throw and obscure the real execution/validation result. Wrap cleanup in try/catch, preserve original task result, and emit structured warning telemetry."
+    },
+    {
+      "id": "CQ-2026-03-05-03",
+      "title": "Tighten cross-repo failure normalization",
+      "priority": "medium",
+      "area": "src/multi-repo-orchestrator.js",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "_processCrossRepoTask() currently records null repo results as `{status: 'pending'}` which is treated as partial later. Normalize null/empty results to explicit failed status + error reason so reports and stop conditions remain deterministic."
+    },
+    {
+      "id": "CQ-2026-03-05-04",
+      "title": "Expand direct unit coverage for core orchestrator primitives",
+      "priority": "medium",
+      "area": "test/",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Add focused tests for src/code-executor.js, src/task-manager.js, src/push-pr-manager.js, src/metrics-writer.js, and src/critic-gate.js edge cases. Current suite passes and covers flows, but these modules have limited direct-edge coverage (timeouts, malformed persisted JSONL, empty commit states, gate override behavior)."
+    },
+    {
+      "id": "CQ-2026-03-05-05",
+      "title": "Refactor CLI option parsing and numeric coercion",
+      "priority": "low",
+      "area": "src/cli.js",
+      "type": "refactor",
+      "status": "open",
+      "details": "parseArgs() uses manual parsing and downstream `||` fallbacks, which can blur intentional zero/false-like values and make validation brittle. Refactor to centralized option schema with explicit integer validation and nullish coalescing for deterministic defaults."
+    }
+  ]
 }
