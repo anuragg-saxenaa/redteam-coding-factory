@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T16:55:00Z",
+  "updatedAt": "2026-03-05T16:58:00Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -109,6 +109,33 @@
       "type": "technical-debt",
       "status": "open",
       "details": "IssueWatcher stores processed issue numbers in an unbounded Set for the process lifetime. Add bounded retention (LRU or TTL window) and a focused test to prevent memory growth during long daemon runs on high-volume repos."
+    },
+    {
+      "id": "CQ-2026-03-05-13",
+      "title": "Guard TaskManager load against malformed/empty queue lines",
+      "priority": "medium",
+      "area": "src/task-manager.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "TaskManager.loadQueue() does `content.trim().split('\n')`; whitespace-only files still create parse-attempt noise and malformed lines only log errors. Add early return for blank content, structured parse warnings, and tests for truncated JSONL recovery to avoid noisy startup and partial-state ambiguity."
+    },
+    {
+      "id": "CQ-2026-03-05-14",
+      "title": "Validate MetricsWriter payload before record() persists",
+      "priority": "medium",
+      "area": "src/metrics-writer.js",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "MetricsWriter.record() assumes `task` and `startTime` are present; missing/invalid values produce NaN/invalid durations and potentially misleading metrics. Add input validation + sane defaults and tests for undefined task/startTime to keep stats trustworthy."
+    },
+    {
+      "id": "CQ-2026-03-05-15",
+      "title": "Add focused tests for TaskManager persistence edge cases",
+      "priority": "medium",
+      "area": "test/",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Add direct unit tests for TaskManager covering duplicate IDs, stale queue entries, malformed JSONL lines, and load/save idempotence under restart. Current integration paths pass but these persistence edge cases are under-tested."
     }
   ]
 }
