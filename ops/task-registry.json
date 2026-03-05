@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T18:15:44Z",
+  "updatedAt": "2026-03-05T19:16:59Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -334,6 +334,33 @@
       "type": "test-coverage",
       "status": "open",
       "details": "evaluateCopilotReviewMetrics() parses policy thresholds via Number(...) without validating finiteness/range (negative percentages, NaN, Infinity). Add strict threshold validation and boundary tests for minSampleSize/minSnr/adoption/ignored limits to keep gate decisions deterministic."
+    },
+    {
+      "id": "CQ-2026-03-05-38",
+      "title": "Harden factory-run.sh command execution to avoid shell injection and quoting drift",
+      "priority": "high",
+      "area": "scripts/factory-run.sh",
+      "type": "security",
+      "status": "open",
+      "details": "factory-run.sh executes user/config-provided values via `bash -lc` (agent_cmd/test_cmd) and interpolated gh/git strings. This is vulnerable to shell metacharacter injection and fragile quoting. Refactor to argv-based execution where possible, restrict/validate command inputs, and add tests for spaces/quotes/newlines in task/test command values."
+    },
+    {
+      "id": "CQ-2026-03-05-39",
+      "title": "Replace brittle CI check parsing in factory-run.sh with structured status handling",
+      "priority": "medium",
+      "area": "scripts/factory-run.sh",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "CI polling currently greps free-form `gh pr checks` output for fail/pass substrings, which can misclassify pending or mixed states. Switch to JSON/status-conclusion based parsing (or gh api) with explicit terminal states and timeouts, plus tests for pending/failure/success edge cases."
+    },
+    {
+      "id": "CQ-2026-03-05-40",
+      "title": "Add dedicated test coverage for factory-run.sh metrics and PR/CI control flow",
+      "priority": "medium",
+      "area": "scripts/factory-run.sh, test/",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "The shell runner contains critical orchestration logic (metrics append, CI retry loop, escalation behavior) but lacks focused automated tests. Add hermetic script-level tests with mocked git/gh/curl to cover pass/fail, create-pr enabled/disabled, retries exhausted, and malformed metrics file recovery."
     }
   ]
 }
