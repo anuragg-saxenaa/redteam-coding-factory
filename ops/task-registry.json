@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T19:16:59Z",
+  "updatedAt": "2026-03-05T20:19:15Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -361,6 +361,51 @@
       "type": "test-coverage",
       "status": "open",
       "details": "The shell runner contains critical orchestration logic (metrics append, CI retry loop, escalation behavior) but lacks focused automated tests. Add hermetic script-level tests with mocked git/gh/curl to cover pass/fail, create-pr enabled/disabled, retries exhausted, and malformed metrics file recovery."
+    },
+    {
+      "id": "CQ-2026-03-05-41",
+      "title": "Introduce automated code coverage reporting and minimum thresholds",
+      "priority": "high",
+      "area": "package.json, test/",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "The current test suite passes but does not emit line/branch/function coverage or enforce minimum thresholds. Add c8/nyc-based coverage collection, publish coverage summaries in CI, and fail builds when minimum thresholds regress."
+    },
+    {
+      "id": "CQ-2026-03-05-42",
+      "title": "Refactor monolithic npm test script into maintainable test runner",
+      "priority": "medium",
+      "area": "package.json, test/",
+      "type": "refactor",
+      "status": "open",
+      "details": "package.json chains many test files in a single long command, which is hard to maintain and debug. Replace with a small test runner script (or npm-run-all style grouping) with clearer grouping/output and easier per-suite execution."
+    },
+    {
+      "id": "CQ-2026-03-05-43",
+      "title": "Add smoke tests to verify task registry schema validity",
+      "priority": "low",
+      "area": "ops/task-registry.json, test/",
+      "type": "reliability",
+      "status": "open",
+      "details": "Recent changes are concentrated in ops/task-registry.json. Add a schema validation test (required fields, enum checks, duplicate ID detection) to prevent malformed backlog entries from breaking automation that consumes this file."
+    },
+    {
+      "id": "CQ-2026-03-05-44",
+      "title": "Add changed-files aware CI test selection to reduce feedback time",
+      "priority": "low",
+      "area": "package.json, scripts/",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Full test runs are deterministic but always execute every suite even for docs/ops-only changes. Add optional changed-files scoped test selection (with full run fallback in protected branches) to speed local and CI feedback without reducing safety."
+    },
+    {
+      "id": "CQ-2026-03-05-45",
+      "title": "Emit structured machine-readable test summary artifact",
+      "priority": "medium",
+      "area": "test/, scripts/",
+      "type": "reliability",
+      "status": "open",
+      "details": "Tests print human-readable logs only. Add a JSON summary artifact (suite pass/fail counts, duration, failures) for downstream automation, dashboards, and deterministic quality reporting in autonomous loops."
     }
   ]
 }
