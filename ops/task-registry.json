@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T20:19:15Z",
+  "updatedAt": "2026-03-05T21:20:45Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -406,6 +406,33 @@
       "type": "reliability",
       "status": "open",
       "details": "Tests print human-readable logs only. Add a JSON summary artifact (suite pass/fail counts, duration, failures) for downstream automation, dashboards, and deterministic quality reporting in autonomous loops."
+    },
+    {
+      "id": "CQ-2026-03-05-46",
+      "title": "Sanitize IssueWatcher in-progress label removal command",
+      "priority": "high",
+      "area": "src/issue-watcher.js",
+      "type": "security",
+      "status": "open",
+      "details": "IssueWatcher._removeInProgressLabel() executes `gh issue edit` via interpolated shell string using repo and issueNumber. Replace with execFile/spawn argv usage and add tests for special characters/invalid input to avoid shell injection and quoting breakage."
+    },
+    {
+      "id": "CQ-2026-03-05-47",
+      "title": "Include orphaned phase1 test suite in default npm test pipeline",
+      "priority": "medium",
+      "area": "package.json, test/phase1.test.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "test/phase1.test.js exists but is not included in the package.json test command chain. Add it (or formally retire it) so foundational worktree/task intake checks are continuously exercised and do not silently regress."
+    },
+    {
+      "id": "CQ-2026-03-05-48",
+      "title": "Add static-analysis quality gate to complement runtime tests",
+      "priority": "low",
+      "area": "package.json, src/",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Current quality checks rely almost entirely on runtime tests. Add a deterministic static-analysis step (eslint ruleset with CI gate and autofix profile) to catch unsafe patterns early (unused branches, accidental globals, unreachable code, unsafe string commands)."
     }
   ]
 }
