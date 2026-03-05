@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T17:37:27Z",
+  "updatedAt": "2026-03-05T18:15:44Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -307,6 +307,33 @@
       "type": "test-coverage",
       "status": "open",
       "details": "ResultValidator supports strict mode requiring typecheck, but current tests focus mainly on default flows. Add explicit strict-mode test matrix (missing typecheck, failed typecheck, successful all-steps) and assertions for short-circuit artifact behavior."
+    },
+    {
+      "id": "CQ-2026-03-05-35",
+      "title": "Validate governance policy numeric fields to prevent NaN gate behavior",
+      "priority": "medium",
+      "area": "src/llm-test-governance.js",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "evaluateGovernance() coerces policy values with Number(...), but invalid strings produce NaN and silently corrupt gate logic (flake/coverage comparisons). Add explicit finite-number validation with clear errors/defaults, and tests for malformed policy input."
+    },
+    {
+      "id": "CQ-2026-03-05-36",
+      "title": "Add candidate report schema validation for governance inputs",
+      "priority": "medium",
+      "area": "src/llm-test-governance.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "Governance evaluation assumes baseline/candidate report shapes are well-formed. Add lightweight schema checks (goldenCases array entries, coverage.linePct, flakeRatePct) with actionable error messages to avoid false gate outcomes on malformed JSON."
+    },
+    {
+      "id": "CQ-2026-03-05-37",
+      "title": "Harden copilot metrics threshold parsing and boundary tests",
+      "priority": "medium",
+      "area": "src/copilot-review-metrics.js, test/copilot-review-metrics.test.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "evaluateCopilotReviewMetrics() parses policy thresholds via Number(...) without validating finiteness/range (negative percentages, NaN, Infinity). Add strict threshold validation and boundary tests for minSampleSize/minSnr/adoption/ignored limits to keep gate decisions deterministic."
     }
   ]
 }
