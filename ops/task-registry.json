@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T16:58:00Z",
+  "updatedAt": "2026-03-05T17:01:00Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -136,6 +136,33 @@
       "type": "test-coverage",
       "status": "open",
       "details": "Add direct unit tests for TaskManager covering duplicate IDs, stale queue entries, malformed JSONL lines, and load/save idempotence under restart. Current integration paths pass but these persistence edge cases are under-tested."
+    },
+    {
+      "id": "CQ-2026-03-05-16",
+      "title": "Quote/sanitize shell arguments in PushPRManager git/gh commands",
+      "priority": "high",
+      "area": "src/push-pr-manager.js",
+      "type": "security",
+      "status": "open",
+      "details": "PushPRManager builds shell commands with string interpolation (`git -C ${wt.path} ...`, `gh pr create --title \"${prTitle}\" ...`). Task titles, repo strings, and paths can contain shell-sensitive characters and break commands or enable injection. Replace with execFile/spawn argv usage and add tests for quotes/newlines/special chars in title/repo/path."
+    },
+    {
+      "id": "CQ-2026-03-05-17",
+      "title": "Escape markdown fields in CriticGate-generated PR body",
+      "priority": "low",
+      "area": "src/critic-gate.js",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "generatePRBody() embeds raw task title/description/errors into markdown. Special sequences/backticks can break formatting and make review output hard to parse. Add lightweight markdown escaping/truncation for untrusted text fields and coverage tests for multiline/error-heavy payloads."
+    },
+    {
+      "id": "CQ-2026-03-05-18",
+      "title": "Add integration tests for PushPRManager command construction",
+      "priority": "medium",
+      "area": "test/",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Add tests that mock command execution to assert branch detection, push, and PR-creation command args are correctly formed and safe. Include force mode + disabled push paths to ensure deterministic errors and no accidental external side effects."
     }
   ]
 }
