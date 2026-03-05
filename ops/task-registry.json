@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T17:01:00Z",
+  "updatedAt": "2026-03-05T17:03:00Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -163,6 +163,33 @@
       "type": "test-coverage",
       "status": "open",
       "details": "Add tests that mock command execution to assert branch detection, push, and PR-creation command args are correctly formed and safe. Include force mode + disabled push paths to ensure deterministic errors and no accidental external side effects."
+    },
+    {
+      "id": "CQ-2026-03-05-19",
+      "title": "Sanitize shell invocation in CodeExecutor stage/remediation commands",
+      "priority": "high",
+      "area": "src/code-executor.js",
+      "type": "security",
+      "status": "open",
+      "details": "CodeExecutor uses shell strings like `cd ${worktreePath} && ...` and interpolates remediation commands directly. Replace with execFile/spawn argv or validated wrappers to avoid shell injection/escaping bugs from paths and generated commands. Add tests for spaces/quotes/special chars in worktree paths."
+    },
+    {
+      "id": "CQ-2026-03-05-20",
+      "title": "Make test command strategy project-aware (avoid hardcoded --run flag)",
+      "priority": "medium",
+      "area": "src/code-executor.js",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "runTests() always executes `npm test -- --run`, which is runner-specific and can fail on repositories that do not support that argument. Add configurable/default test command resolution per repo and fallback behavior, with tests covering incompatible test runners."
+    },
+    {
+      "id": "CQ-2026-03-05-21",
+      "title": "Harden AgentRunner binary availability checks and preset model config",
+      "priority": "low",
+      "area": "src/agent-runner.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "AgentRunner.isAvailable() uses `which ${bin}` shell execution and codex preset hardcodes `-m o4-mini`. Replace availability checks with non-shell resolution, make model configurable via options/env, and add tests for customBin edge cases and deterministic preset args."
     }
   ]
 }
