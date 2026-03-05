@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T17:03:00Z",
+  "updatedAt": "2026-03-05T17:03:19Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -190,6 +190,51 @@
       "type": "technical-debt",
       "status": "open",
       "details": "AgentRunner.isAvailable() uses `which ${bin}` shell execution and codex preset hardcodes `-m o4-mini`. Replace availability checks with non-shell resolution, make model configurable via options/env, and add tests for customBin edge cases and deterministic preset args."
+    },
+    {
+      "id": "CQ-2026-03-05-22",
+      "title": "Ensure fatal processNext errors still execute unified fail path cleanup",
+      "priority": "high",
+      "area": "src/factory.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "processNext() catch block calls taskManager.fail() directly instead of failTask(), skipping metrics emission and worktree cleanup when unexpected exceptions occur after worktree creation. Route all fatal paths through failTask() (or shared finalizer) and add regression tests to prevent orphaned worktrees and missing failure telemetry."
+    },
+    {
+      "id": "CQ-2026-03-05-23",
+      "title": "Normalize cross-repo aggregate status to include hard-fail state",
+      "priority": "medium",
+      "area": "src/multi-repo-orchestrator.js",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "_processCrossRepoTask() currently collapses non-all-completed outcomes to 'partial'. Introduce deterministic aggregate states (completed|partial|failed) so all-failed scenarios are not hidden as partial. Add tests for all-failed and mixed outcomes."
+    },
+    {
+      "id": "CQ-2026-03-05-24",
+      "title": "Externalize stage commands in CodeExecutor (lint/test/commit strategy)",
+      "priority": "medium",
+      "area": "src/code-executor.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "CodeExecutor hardcodes npm-oriented lint/test flow and commit behavior, reducing portability across non-NPM or custom runner repos. Add configurable per-repo command strategy (with safe defaults), and cover unsupported-runner fallback behavior in tests."
+    },
+    {
+      "id": "CQ-2026-03-05-25",
+      "title": "Add direct unit tests for CodingFactory failure/finalization paths",
+      "priority": "medium",
+      "area": "test/",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Current tests cover happy-flow and integration scenarios, but there is no focused unit coverage for CodingFactory finalization branches (validation fail, push/PR fail, thrown exceptions). Add tests asserting status transitions, cleanup invocation, and metrics writes on every terminal path."
+    },
+    {
+      "id": "CQ-2026-03-05-26",
+      "title": "Persist processed issue state across watcher restarts",
+      "priority": "low",
+      "area": "src/issue-watcher.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "IssueWatcher keeps processed issue IDs only in-memory; daemon restart loses dedupe context and can reprocess recently handled issues. Add lightweight persisted dedupe cache with bounded retention (TTL/LRU) and recovery tests."
     }
   ]
 }
