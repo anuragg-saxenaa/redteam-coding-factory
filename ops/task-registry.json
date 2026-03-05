@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T13:49:00Z",
+  "updatedAt": "2026-03-05T16:47:00Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -46,6 +46,42 @@
       "type": "refactor",
       "status": "open",
       "details": "parseArgs() uses manual parsing and downstream `||` fallbacks, which can blur intentional zero/false-like values and make validation brittle. Refactor to centralized option schema with explicit integer validation and nullish coalescing for deterministic defaults."
+    },
+    {
+      "id": "CQ-2026-03-05-06",
+      "title": "Fix cross-repo status derivation to respect failed results",
+      "priority": "high",
+      "area": "src/multi-repo-orchestrator.js",
+      "type": "bug",
+      "status": "open",
+      "details": "_processCrossRepoTask() computes final status using `r.status === 'completed'`, but repo results from factory.processNext() often omit `status` and only set `failed: true`. This can misclassify successful or failed tasks as `partial`. Normalize each repo result before aggregation and treat explicit `failed`/`error` as failure deterministically."
+    },
+    {
+      "id": "CQ-2026-03-05-07",
+      "title": "Add regression tests for cross-repo normalization and aggregate status",
+      "priority": "medium",
+      "area": "test/phase6.test.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Add tests where factory.processNext() returns (a) completed result without status, (b) failed result with failed:true and no status, and (c) null result. Assert _processCrossRepoTask() output status and per-repo normalization are deterministic and do not rely on missing status fields."
+    },
+    {
+      "id": "CQ-2026-03-05-08",
+      "title": "Make task intake IDs deterministic under parallel submissions",
+      "priority": "medium",
+      "area": "src/multi-repo-orchestrator.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "submitCrossRepoTask() uses Date.now()+Math.random() for IDs. Replace with uuid-based IDs (already used elsewhere) to avoid collision risk, improve traceability, and simplify log correlation across retries and distributed runners."
+    },
+    {
+      "id": "CQ-2026-03-05-09",
+      "title": "Extract safe worktree cleanup helper for complete/fail paths",
+      "priority": "low",
+      "area": "src/factory.js",
+      "type": "refactor",
+      "status": "open",
+      "details": "completeTask() and failTask() duplicate cleanup and metrics scaffolding. Extract a shared helper that performs guarded worktree cleanup and common metric envelope creation, reducing drift and ensuring future reliability fixes apply consistently to both paths."
     }
   ]
 }
