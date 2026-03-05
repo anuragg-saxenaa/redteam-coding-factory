@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T17:17:35Z",
+  "updatedAt": "2026-03-05T17:37:27Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -280,6 +280,33 @@
       "type": "reliability",
       "status": "open",
       "details": "fetchIssues() swallows gh/JSON parse failures by returning [] without structured error context. Add explicit error classification/telemetry (auth failure, rate limit, parse error, command timeout), expose last poll error for watcher decisions, and add tests for malformed JSON and gh non-zero exit scenarios."
+    },
+    {
+      "id": "CQ-2026-03-05-32",
+      "title": "Cap fix-task fan-out in ResultValidator to prevent runaway retry loops",
+      "priority": "medium",
+      "area": "src/result-validator.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "enqueueFix() always creates a new fix task when validation fails, without parent-depth or duplicate-error guards. Repeated deterministic failures can produce unbounded fix-task chains. Add max fix-depth / dedupe policy (e.g., hash validation errors + parent lineage) and tests to prevent queue explosion."
+    },
+    {
+      "id": "CQ-2026-03-05-33",
+      "title": "Use monotonic timing for SelfHealingCI retry/backoff accounting",
+      "priority": "low",
+      "area": "src/self-healing-ci.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Retry/backoff/report timing currently relies on wall-clock Date timestamps, which are vulnerable to system clock adjustments during long runs. Introduce monotonic timing source for elapsed calculations and keep ISO timestamps only for audit logs. Add unit tests around retry delay math and reporting consistency."
+    },
+    {
+      "id": "CQ-2026-03-05-34",
+      "title": "Add deterministic tests for ResultValidator strict/typecheck gating behavior",
+      "priority": "medium",
+      "area": "test/result-validator.test.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "ResultValidator supports strict mode requiring typecheck, but current tests focus mainly on default flows. Add explicit strict-mode test matrix (missing typecheck, failed typecheck, successful all-steps) and assertions for short-circuit artifact behavior."
     }
   ]
 }
