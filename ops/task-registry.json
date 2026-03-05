@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T21:20:45Z",
+  "updatedAt": "2026-03-05T22:23:11Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -433,6 +433,33 @@
       "type": "technical-debt",
       "status": "open",
       "details": "Current quality checks rely almost entirely on runtime tests. Add a deterministic static-analysis step (eslint ruleset with CI gate and autofix profile) to catch unsafe patterns early (unused branches, accidental globals, unreachable code, unsafe string commands)."
+    },
+    {
+      "id": "CQ-2026-03-05-49",
+      "title": "Migrate ad-hoc test harnesses to Node built-in test runner for maintainability",
+      "priority": "low",
+      "area": "test/",
+      "type": "refactor",
+      "status": "open",
+      "details": "Many suites implement custom pass/fail counters and explicit process.exit logic. Standardize on node:test (or a thin shared harness) to reduce duplicated boilerplate, improve diagnostics, and simplify per-test timeout/skip controls."
+    },
+    {
+      "id": "CQ-2026-03-05-50",
+      "title": "Add fast smoke-test target separate from full integration matrix",
+      "priority": "medium",
+      "area": "package.json, test/",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Current default test command always executes heavy integration suites, increasing local feedback time for small changes. Add a deterministic smoke target for quick validation (unit + critical paths) and keep full matrix for pre-merge/CI gates."
+    },
+    {
+      "id": "CQ-2026-03-05-51",
+      "title": "Normalize run ID generation in RedTeamFactory to UUID-based identifiers",
+      "priority": "low",
+      "area": "src/redteam-factory.js",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "RedTeamFactory currently builds run IDs with Date.now(), which is less collision-resistant and inconsistent with UUID task/worktree IDs elsewhere. Use UUID-based run identifiers for deterministic traceability across concurrent runs and restarts."
     }
   ]
 }
