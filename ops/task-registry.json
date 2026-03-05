@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T16:47:00Z",
+  "updatedAt": "2026-03-05T16:55:00Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -82,6 +82,33 @@
       "type": "refactor",
       "status": "open",
       "details": "completeTask() and failTask() duplicate cleanup and metrics scaffolding. Extract a shared helper that performs guarded worktree cleanup and common metric envelope creation, reducing drift and ensuring future reliability fixes apply consistently to both paths."
+    },
+    {
+      "id": "CQ-2026-03-05-10",
+      "title": "Harden CLI numeric flags to preserve explicit zero values",
+      "priority": "medium",
+      "area": "src/cli.js",
+      "type": "bug-risk",
+      "status": "open",
+      "details": "watch-mode options currently use `args.value || config.value || default`, which drops valid parsed zeros and makes behavior implicit. Switch to explicit finite-number validation and nullish-coalescing (`??`) so `0` and invalid numbers are handled deterministically with clear errors."
+    },
+    {
+      "id": "CQ-2026-03-05-11",
+      "title": "Add tests for CLI flag coercion and invalid numeric input",
+      "priority": "medium",
+      "area": "test/cli.test.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Add cases for `--interval`, `--retry-budget`, `--max-tasks`, and `--max-polls` covering explicit zero, negative, NaN, and omitted values. Assert deterministic fallback/error behavior and prevent regressions in watch-mode runtime limits."
+    },
+    {
+      "id": "CQ-2026-03-05-12",
+      "title": "Bound in-memory processed-issue set for long-running watchers",
+      "priority": "low",
+      "area": "src/issue-watcher.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "IssueWatcher stores processed issue numbers in an unbounded Set for the process lifetime. Add bounded retention (LRU or TTL window) and a focused test to prevent memory growth during long daemon runs on high-volume repos."
     }
   ]
 }
