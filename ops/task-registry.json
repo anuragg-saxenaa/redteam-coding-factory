@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T17:03:19Z",
+  "updatedAt": "2026-03-05T17:08:38Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -235,6 +235,24 @@
       "type": "technical-debt",
       "status": "open",
       "details": "IssueWatcher keeps processed issue IDs only in-memory; daemon restart loses dedupe context and can reprocess recently handled issues. Add lightweight persisted dedupe cache with bounded retention (TTL/LRU) and recovery tests."
+    },
+    {
+      "id": "CQ-2026-03-05-27",
+      "title": "Propagate RedTeamFactory push/PR flags into orchestrated factories",
+      "priority": "high",
+      "area": "src/redteam-factory.js, src/multi-repo-orchestrator.js",
+      "type": "bug",
+      "status": "open",
+      "details": "RedTeamFactory accepts enablePush/createPR in config, but initialize() does not pass them into MultiRepoOrchestrator, and _initializeFactories() hardcodes enablePush/createPR false. As a result push/PR is silently disabled even when configured. Thread these flags through orchestrator/factory config and add integration tests asserting push/PR settings are honored."
+    },
+    {
+      "id": "CQ-2026-03-05-28",
+      "title": "Add unit coverage for RedTeamFactory configuration passthrough and state persistence edge cases",
+      "priority": "medium",
+      "area": "test/redteam-factory.test.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Expand RedTeamFactory tests to validate constructor config passthrough (enablePush/createPR/retry settings) and saveState() behavior when target directory does not exist or write fails. Current tests verify happy path only, leaving config drift and IO error handling unguarded."
     }
   ]
 }
