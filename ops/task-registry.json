@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T17:08:38Z",
+  "updatedAt": "2026-03-05T17:17:35Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -253,6 +253,33 @@
       "type": "test-coverage",
       "status": "open",
       "details": "Expand RedTeamFactory tests to validate constructor config passthrough (enablePush/createPR/retry settings) and saveState() behavior when target directory does not exist or write fails. Current tests verify happy path only, leaving config drift and IO error handling unguarded."
+    },
+    {
+      "id": "CQ-2026-03-05-29",
+      "title": "Sanitize gh CLI command construction in GitHubIntake methods",
+      "priority": "high",
+      "area": "src/github-intake.js",
+      "type": "security",
+      "status": "open",
+      "details": "GitHubIntake builds gh commands via string interpolation for repo/labels/issue body/comment text. Special shell characters in repo names, labels, or user-provided issue/comment content can break commands or enable injection. Replace execSync string commands with execFile/spawn argv and add tests covering quotes/newlines/shell metacharacters."
+    },
+    {
+      "id": "CQ-2026-03-05-30",
+      "title": "Implement real sessions_spawn/sessions_history agent flow in AgentIntegration",
+      "priority": "medium",
+      "area": "src/agent-integration.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "AgentIntegration currently simulates sub-agent execution with timers and synthetic session keys, which diverges from production behavior and can hide orchestration failures. Integrate real sessions_spawn + sessions_history flow behind an adapter, keep deterministic mock mode for tests, and add failure/timeout/retry-path coverage."
+    },
+    {
+      "id": "CQ-2026-03-05-31",
+      "title": "Add resilience and observability for GitHubIntake parse/auth failures",
+      "priority": "medium",
+      "area": "src/github-intake.js, test/github-intake.test.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "fetchIssues() swallows gh/JSON parse failures by returning [] without structured error context. Add explicit error classification/telemetry (auth failure, rate limit, parse error, command timeout), expose last poll error for watcher decisions, and add tests for malformed JSON and gh non-zero exit scenarios."
     }
   ]
 }
