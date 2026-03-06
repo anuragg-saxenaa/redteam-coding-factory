@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-06T00:30:09Z",
+  "updatedAt": "2026-03-06T01:31:47Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -514,6 +514,33 @@
       "type": "test-coverage",
       "status": "open",
       "details": "Integration suites perform best-effort cleanup but do not assert cleanup completeness. Add post-suite checks ensuring test dirs/worktrees are removed to catch resource leaks and flaky rerun behavior early."
+    },
+    {
+      "id": "CQ-2026-03-05-58",
+      "title": "Stop logging raw task JSONL lines on parse failure in TaskManager/WorktreeManager",
+      "priority": "medium",
+      "area": "src/task-manager.js, src/worktree-manager.js",
+      "type": "security",
+      "status": "open",
+      "details": "Current parse-failure handlers log full malformed lines, which can leak sensitive task contents or prompt payloads into logs. Replace with truncated/sanitized excerpts + line index/context metadata, and add tests asserting no full payload leakage."
+    },
+    {
+      "id": "CQ-2026-03-05-59",
+      "title": "Add deterministic seedable ID generator option for orchestration tests",
+      "priority": "low",
+      "area": "src/multi-repo-orchestrator.js, src/redteam-factory.js, test/",
+      "type": "refactor",
+      "status": "open",
+      "details": "Tests currently rely on time/random-derived IDs in several code paths, which reduces reproducibility in snapshot/assertion-heavy diagnostics. Add injectable ID generator (default UUID) so tests can use deterministic seeds while production remains collision-safe."
+    },
+    {
+      "id": "CQ-2026-03-05-60",
+      "title": "Add retry/timeout coverage for gh auth and issue-edit command paths",
+      "priority": "medium",
+      "area": "src/github-intake.js, src/issue-watcher.js, test/github-intake.test.js, test/issue-watcher.test.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Current tests cover happy-path behavior but have limited focused coverage for gh auth timeout, auth failure, and issue-label removal command failures. Add mocks for non-zero exits/timeouts and assert fallback behavior and error classification are deterministic."
     }
   ]
 }
