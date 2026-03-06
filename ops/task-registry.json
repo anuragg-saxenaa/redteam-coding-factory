@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-06T02:34:01Z",
+  "updatedAt": "2026-03-06T03:40:48Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -586,6 +586,51 @@
       "type": "technical-debt",
       "status": "open",
       "details": "The default matrix runs many sequential suites and currently took a long end-to-end run. Capture per-suite timing baselines and add a configurable regression budget warning/fail mode to prevent gradual feedback-time erosion."
+    },
+    {
+      "id": "CQ-2026-03-05-66",
+      "title": "Stabilize cross-repo task ID generation away from Date.now()+Math.random()",
+      "priority": "medium",
+      "area": "src/multi-repo-orchestrator.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Cross-repo IDs still appear as `cross-repo-<timestamp>-<random>` in test output, which is non-deterministic and harder to trace/debug. Replace with UUID-based IDs (or injectable deterministic generator for tests) and update assertions/log correlation helpers."
+    },
+    {
+      "id": "CQ-2026-03-05-67",
+      "title": "Add path-safe fixture creation helper for integration test repositories",
+      "priority": "medium",
+      "area": "test/integration.test.js, test/phase6.test.js, test/redteam-factory.test.js",
+      "type": "refactor",
+      "status": "open",
+      "details": "Integration suites repeat shell-heavy git setup patterns for temporary repos. Centralize into a shared helper using argv-based process execution to reduce duplication and remove path quoting fragility across suites."
+    },
+    {
+      "id": "CQ-2026-03-05-68",
+      "title": "Introduce concise mode for default npm test logs in CI",
+      "priority": "low",
+      "area": "package.json, scripts/",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Current `npm test` output is very verbose, making failures harder to spot quickly. Add an optional concise/summary mode that preserves full logs as artifacts while surfacing per-suite pass/fail and elapsed time in the console."
+    },
+    {
+      "id": "CQ-2026-03-05-69",
+      "title": "Add guardrail test for accidental orphaned worktrees after failing runs",
+      "priority": "medium",
+      "area": "test/integration.test.js, src/factory.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Although happy-path cleanup passes, add a regression case that forces mid-pipeline exceptions and asserts no worktree directories remain after failure finalization to prevent disk bloat in long-running agents."
+    },
+    {
+      "id": "CQ-2026-03-05-70",
+      "title": "Add static check to fail if package.json test chain omits known core suites",
+      "priority": "low",
+      "area": "test/, package.json",
+      "type": "reliability",
+      "status": "open",
+      "details": "The test chain is manually maintained and prone to accidental suite omission. Add a lightweight meta-test that validates required core suites are included (or explicitly deprecated) in the default test pipeline."
     }
   ]
 }
