@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-06T04:41:57Z",
+  "updatedAt": "2026-03-06T05:43:17Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -676,6 +676,51 @@
       "type": "technical-debt",
       "status": "open",
       "details": "Capture and persist per-suite runtimes across runs and surface trend deltas, so slow regression in integration suites is caught early without waiting for major runtime spikes."
+    },
+    {
+      "id": "CQ-2026-03-06-76",
+      "title": "Add zero-noise mode for negative-path test logging",
+      "priority": "low",
+      "area": "test/result-validator.test.js, test/self-healing-ci.test.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Negative-path unit tests intentionally emit FAIL-like lines that can trigger noisy alerts. Add a quiet/structured mode where expected failures are reported as `expected_negative=true` and avoid raw FAIL tokens in default CI logs."
+    },
+    {
+      "id": "CQ-2026-03-06-77",
+      "title": "Add deterministic cross-repo task ID contract test",
+      "priority": "medium",
+      "area": "test/phase6.test.js, src/multi-repo-orchestrator.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Cross-repo IDs still include timestamp/random patterns in runtime output. Add a contract test to enforce UUID (or deterministic injected generator) format and prevent reintroduction of non-deterministic ID schemes."
+    },
+    {
+      "id": "CQ-2026-03-06-78",
+      "title": "Introduce lightweight quality-review smoke command",
+      "priority": "low",
+      "area": "package.json, scripts/",
+      "type": "refactor",
+      "status": "open",
+      "details": "Frequent quality-review requests currently require full `npm test`. Add `npm run quality:smoke` (lint/schema/core suites) for faster iteration while keeping full matrix for final verification."
+    },
+    {
+      "id": "CQ-2026-03-06-79",
+      "title": "Add CI-friendly truncation for verbose integration logs",
+      "priority": "low",
+      "area": "test/integration.test.js, test/phase6.test.js, test/redteam-factory.test.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "Integration tests print extensive step logs that bury failure context in CI. Add environment-driven log level control and automatic tail summary to preserve diagnostics while improving signal-to-noise."
+    },
+    {
+      "id": "CQ-2026-03-06-80",
+      "title": "Validate task-registry growth with archival policy",
+      "priority": "medium",
+      "area": "ops/task-registry.json, scripts/",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Task registry has grown rapidly via repeated review cycles. Define and enforce archival/rotation for closed items (or split by month) so tooling stays fast and merge conflicts are reduced."
     }
   ]
 }
