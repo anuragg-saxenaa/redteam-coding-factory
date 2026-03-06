@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-06T01:31:47Z",
+  "updatedAt": "2026-03-06T02:34:01Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -541,6 +541,51 @@
       "type": "test-coverage",
       "status": "open",
       "details": "Current tests cover happy-path behavior but have limited focused coverage for gh auth timeout, auth failure, and issue-label removal command failures. Add mocks for non-zero exits/timeouts and assert fallback behavior and error classification are deterministic."
+    },
+    {
+      "id": "CQ-2026-03-05-61",
+      "title": "Reduce false-positive FAIL signals in passing test logs",
+      "priority": "low",
+      "area": "test/result-validator.test.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "The validator unit suite intentionally prints per-case 'validation: FAIL' lines while the suite passes overall. These strings can trigger naive CI log scrapers and alerting rules. Refactor test logging to clearly mark expected failures (e.g., EXPECTED_FAIL_CASE) and add a regression check for unambiguous pass/fail summary output."
+    },
+    {
+      "id": "CQ-2026-03-05-62",
+      "title": "Add changed-files quality gate for ops-only/task-registry changes",
+      "priority": "low",
+      "area": "scripts/, package.json",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Recent commits touched only ops/task-registry.json, but full integration matrix still ran. Add an optional changed-files-aware gate that runs schema + lint + smoke checks for ops/docs-only changes, while preserving full matrix on protected branches and code changes."
+    },
+    {
+      "id": "CQ-2026-03-05-63",
+      "title": "Add deterministic schema validation test for task-registry modifications",
+      "priority": "medium",
+      "area": "ops/task-registry.json, test/",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Task registry changed in multiple consecutive commits. Add a dedicated schema validator test that enforces required fields, enum values, ISO timestamp format, and monotonically unique IDs to prevent backlog automation breakage from malformed entries."
+    },
+    {
+      "id": "CQ-2026-03-05-64",
+      "title": "Emit compact JUnit-style test artifact for CI quality dashboards",
+      "priority": "medium",
+      "area": "scripts/, test/",
+      "type": "reliability",
+      "status": "open",
+      "details": "Current `npm test` output is human-readable only and very verbose. Add optional JUnit (or equivalent machine-readable) artifact emission so CI can surface flaky suites, duration hotspots, and regressions without brittle log parsing."
+    },
+    {
+      "id": "CQ-2026-03-05-65",
+      "title": "Establish per-suite runtime baseline and regression budget",
+      "priority": "medium",
+      "area": "test/, package.json",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "The default matrix runs many sequential suites and currently took a long end-to-end run. Capture per-suite timing baselines and add a configurable regression budget warning/fail mode to prevent gradual feedback-time erosion."
     }
   ]
 }
