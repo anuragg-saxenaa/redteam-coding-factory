@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-06T05:43:17Z",
+  "updatedAt": "2026-03-06T08:51:50Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -721,6 +721,96 @@
       "type": "technical-debt",
       "status": "open",
       "details": "Task registry has grown rapidly via repeated review cycles. Define and enforce archival/rotation for closed items (or split by month) so tooling stays fast and merge conflicts are reduced."
+    },
+    {
+      "id": "CQ-2026-03-06-81",
+      "title": "Add auto-dedup for cross-repo dependency resolution",
+      "priority": "medium",
+      "area": "src/multi-repo-orchestrator.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Cross-repo tasks currently add every dependency without checking for duplicates, causing redundant downstream processing. Add deduplication logic before dependency registration and add a unit test verifying no duplicate edges in dependency graph."
+    },
+    {
+      "id": "CQ-2026-03-06-82",
+      "title": "Add registry-rotation script for closed/completed task archival",
+      "priority": "low",
+      "area": "ops/task-registry.json, scripts/",
+      "type": "refactor",
+      "status": "open",
+      "details": "With 80+ tasks, the registry is becoming unwieldy. Create a script that moves closed items to an archive (e.g., ops/task-registry-archive/2026-03.json) and add CI check ensuring main registry stays under size threshold."
+    },
+    {
+      "id": "CQ-2026-03-06-83",
+      "title": "Add explicit failure-mode test for GitHubIntake gh-timeout handling",
+      "priority": "medium",
+      "area": "test/github-intake.test.js, src/github-intake.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Current tests cover happy path but lack explicit coverage for gh command timeouts. Add a mock that simulates timeout and asserts the error is classified appropriately with retryability metadata."
+    },
+    {
+      "id": "CQ-2026-03-06-84",
+      "title": "Add env-driven test parallelization gate",
+      "priority": "low",
+      "area": "package.json, test/",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Default test run is sequential and slow. Add environment variable support (e.g., PARALLEL=true) to optionally run independent suites in parallel and document the speedup on modern hardware."
+    },
+    {
+      "id": "CQ-2026-03-06-85",
+      "title": "Add graceful shutdown hook to IssueWatcher daemon",
+      "priority": "medium",
+      "area": "src/issue-watcher.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "IssueWatcher lacks SIGTERM handling. Long-running daemon cannot be cleanly stopped without data loss risk. Add graceful shutdown that drains pending work and persists state before exit."
+    },
+    {
+      "id": "CQ-2026-03-06-86",
+      "title": "Add JSON-schema validation for factory config files",
+      "priority": "medium",
+      "area": "src/factory.js, src/redteam-factory.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "Factory configuration (factory.config.json) lacks schema validation. Malformed configs cause runtime failures. Add JSON-schema check at startup and fail fast with actionable error messages for missing required fields."
+    },
+    {
+      "id": "CQ-2026-03-06-87",
+      "title": "Add retry-budget exhausted event to MetricsWriter output",
+      "priority": "medium",
+      "area": "src/metrics-writer.js, src/self-healing-ci.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "Current metrics track pass/fail and attempts but omit retry-budget exhaustion events. Add a specific event type for budget exhaustion so downstream dashboards can surface budget-related failure patterns."
+    },
+    {
+      "id": "CQ-2026-03-06-88",
+      "title": "Add explicit coverage for AgentIntegration real sessions_spawn path",
+      "priority": "medium",
+      "area": "src/agent-integration.js, test/agent-integration.test.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "AgentIntegration currently simulates execution with timers. Add test mode that exercises real sessions_spawn flow (with mocked sessions_history) to increase confidence in production orchestration."
+    },
+    {
+      "id": "CQ-2026-03-06-89",
+      "title": "Add structured logging abstraction layer (debug/info/warn/error)",
+      "priority": "low",
+      "area": "src/",
+      "type": "refactor",
+      "status": "open",
+      "details": "Core modules use console.log/error directly. Introduce a simple logger module with level support and structured output (JSON) for machine parsing, then migrate critical paths first."
+    },
+    {
+      "id": "CQ-2026-03-06-90",
+      "title": "Add health-check endpoint to IssueWatcher daemon mode",
+      "priority": "low",
+      "area": "src/issue-watcher.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "Long-running IssueWatcher daemon lacks a health endpoint. Add optional HTTP health endpoint (localhost:port/health) that returns status, stats, and uptime for container/orchestration health monitoring."
     }
   ]
 }
