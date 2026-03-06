@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-05T23:27:05Z",
+  "updatedAt": "2026-03-06T00:30:09Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -487,6 +487,33 @@
       "type": "technical-debt",
       "status": "open",
       "details": "Default `npm test` runs a long sequential integration-heavy chain but no runtime budget is tracked. Add a lightweight timing guard/report (per-suite + total) with warning/fail thresholds to detect regression in feedback time as suites grow."
+    },
+    {
+      "id": "CQ-2026-03-05-55",
+      "title": "Add structured error metadata for GitHubIntake fetch failures",
+      "priority": "medium",
+      "area": "src/github-intake.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "fetchIssues() currently logs plain-text errors and returns empty arrays on failure. Add structured error objects (type/code/source command + retryability) to improve watcher decision-making and prevent silent quality drift when gh calls fail."
+    },
+    {
+      "id": "CQ-2026-03-05-56",
+      "title": "Replace bare console.error usage with leveled logger abstraction",
+      "priority": "low",
+      "area": "src/",
+      "type": "refactor",
+      "status": "open",
+      "details": "Core modules rely on direct console.error/log calls, making observability inconsistent and hard to route in CI/daemon contexts. Introduce a lightweight logger interface (debug/info/warn/error with context fields) and migrate critical orchestration paths first."
+    },
+    {
+      "id": "CQ-2026-03-05-57",
+      "title": "Add deterministic cleanup verification for integration test temp artifacts",
+      "priority": "low",
+      "area": "test/integration.test.js, test/phase6.test.js, test/redteam-factory.test.js",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Integration suites perform best-effort cleanup but do not assert cleanup completeness. Add post-suite checks ensuring test dirs/worktrees are removed to catch resource leaks and flaky rerun behavior early."
     }
   ]
 }
