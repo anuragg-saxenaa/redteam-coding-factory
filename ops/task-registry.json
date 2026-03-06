@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-06T08:51:50Z",
+  "updatedAt": "2026-03-06T14:59:34Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -811,6 +811,51 @@
       "type": "reliability",
       "status": "open",
       "details": "Long-running IssueWatcher daemon lacks a health endpoint. Add optional HTTP health endpoint (localhost:port/health) that returns status, stats, and uptime for container/orchestration health monitoring."
+    },
+    {
+      "id": "CQ-2026-03-06-91",
+      "title": "Add max-concurrent limit enforcement in MultiRepoOrchestrator",
+      "priority": "medium",
+      "area": "src/multi-repo-orchestrator.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "MultiRepoOrchestrator currently lacks explicit concurrent-task limits. Add configurable maxConcurrent setting and enforce it to prevent resource exhaustion on high-volume multi-repo scenarios."
+    },
+    {
+      "id": "CQ-2026-03-06-92",
+      "title": "Add timeout jitter to prevent thundering-herd in autonomous retry loops",
+      "priority": "low",
+      "area": "src/self-healing-ci.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Retry loops use fixed backoff intervals, causing synchronized retries across multiple instances. Add random jitter (\u00b110%) to retry delays to spread load and reduce contention."
+    },
+    {
+      "id": "CQ-2026-03-06-93",
+      "title": "Add idempotent worktree cleanup to prevent false 'already removed' errors",
+      "priority": "medium",
+      "area": "src/worktree-manager.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "Worktree removal fails if already removed, causing noisy errors in logs. Add existence check before removal and handle gracefully to reduce false alarm noise."
+    },
+    {
+      "id": "CQ-2026-03-06-94",
+      "title": "Add rate-limit backoff to IssueWatcher gh API calls",
+      "priority": "medium",
+      "area": "src/issue-watcher.js, src/github-intake.js",
+      "type": "reliability",
+      "status": "open",
+      "details": "GitHub API rate limits are not handled gracefully. Add exponential backoff with header-guided retry-after values to prevent 403 failures from blocking the watcher."
+    },
+    {
+      "id": "CQ-2026-03-06-95",
+      "title": "Add structured error context to CLI user-facing errors",
+      "priority": "low",
+      "area": "src/cli.js",
+      "type": "refactor",
+      "status": "open",
+      "details": "CLI errors print raw messages without context. Add structured error formatting with error codes and actionable resolution hints for common failure modes."
     }
   ]
 }
