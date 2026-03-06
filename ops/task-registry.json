@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-06T03:40:48Z",
+  "updatedAt": "2026-03-06T04:41:57Z",
   "tasks": [
     {
       "id": "CQ-2026-03-05-01",
@@ -631,6 +631,51 @@
       "type": "reliability",
       "status": "open",
       "details": "The test chain is manually maintained and prone to accidental suite omission. Add a lightweight meta-test that validates required core suites are included (or explicitly deprecated) in the default test pipeline."
+    },
+    {
+      "id": "CQ-2026-03-05-71",
+      "title": "Split default test pipeline into grouped scripts for maintainability",
+      "priority": "medium",
+      "area": "package.json, test/",
+      "type": "refactor",
+      "status": "open",
+      "details": "`npm test` is a long chained command that is hard to maintain and debug. Introduce grouped npm scripts (core, integration, governance, watcher) and a top-level runner that preserves ordering while making failures easier to isolate."
+    },
+    {
+      "id": "CQ-2026-03-05-72",
+      "title": "Add machine-readable test summary JSON artifact to default test run",
+      "priority": "medium",
+      "area": "scripts/, test/",
+      "type": "reliability",
+      "status": "open",
+      "details": "Current output is console-first and difficult for automation to consume. Emit a deterministic JSON summary (suite, status, duration, failures) to support CI dashboards and downstream quality gates."
+    },
+    {
+      "id": "CQ-2026-03-05-73",
+      "title": "Enforce duplicate task-id detection in task-registry CI checks",
+      "priority": "low",
+      "area": "ops/task-registry.json, test/",
+      "type": "test-coverage",
+      "status": "open",
+      "details": "Task registry updates are frequent. Add an automated check to fail on duplicate IDs and malformed timestamp fields before merge so backlog tooling remains stable."
+    },
+    {
+      "id": "CQ-2026-03-05-74",
+      "title": "Add deterministic log markers for expected negative-path unit tests",
+      "priority": "low",
+      "area": "test/result-validator.test.js, test/self-healing-ci.test.js",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Negative-path tests currently print generic FAIL strings even when expected. Standardize on explicit markers (e.g., EXPECTED_NEGATIVE_PATH) to reduce false alerting and simplify log post-processing."
+    },
+    {
+      "id": "CQ-2026-03-05-75",
+      "title": "Add per-suite runtime trend report for regression detection",
+      "priority": "low",
+      "area": "scripts/, test/",
+      "type": "technical-debt",
+      "status": "open",
+      "details": "Capture and persist per-suite runtimes across runs and surface trend deltas, so slow regression in integration suites is caught early without waiting for major runtime spikes."
     }
   ]
 }
