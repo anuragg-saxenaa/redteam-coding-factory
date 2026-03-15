@@ -4,8 +4,11 @@
  */
 
 const MultiRepoOrchestrator = require('./multi-repo-orchestrator');
+const DashboardService = require('./dashboard/dashboard-service');
 const path = require('path');
 const fs = require('fs');
+
+const CodingFactory = require('./factory');
 
 class RedTeamFactory {
   constructor(config = {}) {
@@ -25,6 +28,10 @@ class RedTeamFactory {
     this.orchestrator = null;
     this.taskLog = [];
     this.resultLog = [];
+    this.dashboard = null;
+    
+    // Initialize underlying factories for each repo
+    this.factories = new Map();
   }
 
   /**
@@ -49,51 +56,45 @@ class RedTeamFactory {
 
     this.orchestrator = new MultiRepoOrchestrator(orchestratorConfig);
     console.log(`[RedTeamFactory] Initialized with ${repos.length} repos`);
+    
+    // Initialize dashboard
+    this.initializeDashboard();
+    
     return this.orchestrator;
+  }
+
+  /**
+   * Initialize dashboard service
+   */
+  initializeDashboard() {
+    if (this.config.enableDashboard !== false) {
+      this.dashboard = new DashboardService(this);
+      this.dashboard.start();
+      console.log('[RedTeamFactory] Dashboard service started');
+    }
   }
 
   /**
    * Submit a task to a specific repo
    */
   submitTask(repoName, task) {
-    if (!this.orchestrator) throw new Error('Factory not initialized');
-    const record = this.orchestrator.submitTask(repoName, task);
-    this.taskLog.push({
-      taskId: record.id,
-      repoName,
-      title: task.title,
-      submittedAt: new Date().toISOString()
-    });
-    return record;
+    if (!this.orchestrator) {
+      throw new Error('Factory not initialized. Call initialize() first.');
+    }
+    const submitted = this.orchestrator.submitTask(repoName, task);
+    this.taskLog.push(submitted);
+    return submitted;
   }
 
   /**
-   * Submit a cross-repo task
-   */
-  submitCrossRepoTask(task) {
-    if (!this.orchestrator) throw new Error('Factory not initialized');
-    const record = this.orchestrator.submitCrossRepoTask(task);
-    this.taskLog.push({
-      taskId: record.id,
-      title: task.title,
-      isCrossRepo: true,
-      submittedAt: new Date().toISOString()
-    });
-    return record;
-  }
-
-  /**
-   * Run the factory autonomously
+   * Run the factory (autonomous loop)
    */
   async run() {
-    if (!this.orchestrator) throw new Error('Factory not initialized');
-    console.log('[RedTeamFactory] Starting autonomous run');
-    const results = await this.orchestrator.startAutonomousLoop();
-    this.resultLog.push({
-      runId: `run-${Date.now()}`,
-      results,
-      completedAt: new Date().toISOString()
-    });
+    if (!this.orchestrator) {
+      throw new Error('Factory not initialized. Call initialize() first.');
+    }
+    const results = await this.orchestrator.run();
+    this.resultLog.push(results);
     return results;
   }
 
@@ -112,29 +113,70 @@ class RedTeamFactory {
   }
 
   /**
-   * Export factory state to JSON
+   * Save factory state to file
    */
-  exportState() {
-    return {
+  saveState(filePath) {
+    const state = {
       config: this.config,
       repos: this.repos,
       taskLog: this.taskLog,
       resultLog: this.resultLog,
-      orchestratorState: this.orchestrator ? {
-        totalRepos: this.orchestrator.listRepos().length,
-        queueSize: this.orchestrator.globalTaskQueue.length,
-        resultsCount: this.orchestrator.results.size
-      } : null
+      timestamp: new Date().toISOString()
+    };
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
+  }
+
+  /**
+   * Load factory state from file
+   */
+  loadState(filePath) {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`State file not found: ${filePath}`);
+    }
+    const state = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    this.taskLog = state.taskLog || [];
+    this.resultLog = state.resultLog || [];
+    return state;
+  }
+
+  /**
+   * Get factory status
+   */
+  status() {
+    const tasks = this.taskLog;
+    const queued = tasks.filter(t => t.status === 'queued').length;
+    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+    const completed = tasks.filter(t => t.status === 'completed').length;
+    const failed = tasks.filter(t => t.status === 'failed').length;
+
+    return {
+      queued,
+      inProgress,
+      completed,
+      failed,
+      total: tasks.length,
+      isRunning: this.orchestrator?.isRunning || false,
+      enablePush: this.config.enablePush,
+      createPR: this.config.createPR,
+      enableAutoRemediation: this.config.enableAutoRemediation,
+      maxRetryBudget: this.config.maxRetryBudget,
+      maxRemediationAttempts: this.config.maxRemediationAttempts,
+      dashboardEnabled: this.dashboard !== null
     };
   }
 
   /**
-   * Save factory state to disk
+   * Stop the factory and dashboard
    */
-  saveState(filePath) {
-    const state = this.exportState();
-    fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
-    console.log(`[RedTeamFactory] State saved to ${filePath}`);
+  stop() {
+    if (this.dashboard) {
+      this.dashboard.stop();
+    }
+    if (this.orchestrator) {
+      this.orchestrator.stop();
+    }
+    console.log('[RedTeamFactory] Factory stopped');
   }
 }
 

@@ -294,6 +294,13 @@ class MultiRepoOrchestrator {
   getFactory(repoName) {
     return this.factories.get(repoName);
   }
+
+  /**
+   * Run - alias for startAutonomousLoop() for RedTeamFactory compatibility
+   */
+  async run() {
+    return this.startAutonomousLoop();
+  }
 }
 
 module.exports = MultiRepoOrchestrator;

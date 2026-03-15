@@ -247,6 +247,68 @@ if ! (
   agent_rc=$?
 fi
 
+# Phase 2: lint gate before tests
+echo "[factory-run] running lint gate..."
+lint_rc=0
+lint_cmd="${LINT_CMD:-npm run lint}"
+if ! (
+  cd "$worktree_path"
+  bash -lc "$lint_cmd"
+); then
+  lint_rc=$?
+fi
+
+if [[ "$lint_rc" -ne 0 ]]; then
+  echo "[factory-run] lint gate FAILED (exit $lint_rc), attempting auto-fix..."
+  if (
+    cd "$worktree_path"
+    bash -lc "$lint_cmd --fix"
+  ); then
+    echo "[factory-run] lint auto-fix applied, re-running lint..."
+    if ! (
+      cd "$worktree_path"
+      bash -lc "$lint_cmd"
+    ); then
+      echo "[factory-run] lint still failing after auto-fix, failing task."
+      test_rc=1
+      result="fail"
+      cat >"$status_file" <<STATUS
+branch=$branch
+worktree=$worktree_path
+agent=$agent_name
+agent_rc=$agent_rc
+test_cmd=$test_cmd
+lint_cmd=$lint_cmd
+lint_rc=$lint_rc
+result=$result
+timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+STATUS
+      append_metrics_entry
+      post_slack_update
+      exit 1
+    fi
+  else
+    echo "[factory-run] lint auto-fix failed, failing task."
+    test_rc=1
+    result="fail"
+    cat >"$status_file" <<STATUS
+branch=$branch
+worktree=$worktree_path
+agent=$agent_name
+agent_rc=$agent_rc
+test_cmd=$test_cmd
+lint_cmd=$lint_cmd
+lint_rc=$lint_rc
+result=$result
+timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+STATUS
+    append_metrics_entry
+    post_slack_update
+    exit 1
+  fi
+fi
+echo "[factory-run] lint gate PASSED"
+
 echo "[factory-run] running test command: $test_cmd"
 test_rc=0
 if ! (

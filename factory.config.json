@@ -1,19 +1,15 @@
 {
-  "pipeline": "redteam-coding-factory",
-  "version": "1.0.0",
-  "tasks": [
-    "build",
-    "test"
-  ],
-  "environment": {
-    "node_version": "20",
-    "python_version": "3.11"
-  },
-  "dataDir": "./.factory-data",
+  "dataDir": "./data",
+  "enablePush": false,
+  "createPR": false,
+  "enableAutoRemediation": false,
+  "maxRetryBudget": 6,
+  "maxRemediationAttempts": 1,
+  "enableDashboard": true,
   "repos": [
     {
       "name": "redteam-coding-factory",
-      "path": ".",
+      "path": "/Users/redinside/Development/Codebase/projects/RedTeam/github/redteam-coding-factory",
       "branch": "main"
     }
   ]

@@ -3,15 +3,27 @@
  * Spawns sub-agents to work on tasks inside isolated worktrees
  */
 
-const path = require('path');
+const A2AClient = require('./a2a-client');
 
 class AgentIntegration {
   constructor(factory, agentId = 'eng', options = {}) {
     this.factory = factory;
     this.agentId = agentId;
-    this.activeAgents = new Map(); // taskId → agentSessionKey
+    this.activeAgents = new Map(); // taskId -> agentSessionKey
     this.defaultTimeoutMs = options.defaultTimeoutMs || 5 * 60 * 1000;
     this.simulatedWorkMs = options.simulatedWorkMs || 5000;
+
+    this._transport = options.transport || this._defaultTransport.bind(this);
+    this.a2aClient = new A2AClient({
+      transport: this._transport,
+      defaultTimeoutSeconds: options.a2aTimeoutSeconds || 45,
+      maxAttempts: options.a2aMaxAttempts || 3,
+      baseBackoffMs: options.a2aBackoffMs || 200,
+      maxBackoffMs: options.a2aMaxBackoffMs || 2000,
+      jitterMs: options.a2aJitterMs || 25,
+      enableFallback: options.a2aEnableFallback ?? true,
+      fallbackMethod: options.a2aFallbackMethod || 'sessions_spawn',
+    });
   }
 
   /**
@@ -25,17 +37,43 @@ class AgentIntegration {
 
     console.log(`[AgentIntegration] Spawning agent for task ${task.id}...`);
 
-    // In a real implementation, this would call sessions_spawn
-    // For now, we'll simulate it with a placeholder
-    const agentSessionKey = `agent:${this.agentId}:task-${task.id}`;
-    
+    // Attempt resilient A2A dispatch first. On transport absence/failure,
+    // continue with local placeholder session key so the POC stays runnable.
+    let dispatch = null;
+    try {
+      dispatch = await this.a2aClient.send({
+        agentId: this.agentId,
+        message: prompt,
+        timeoutSeconds: Math.max(1, Math.ceil(this.defaultTimeoutMs / 1000)),
+      });
+    } catch (error) {
+      console.warn(`[AgentIntegration] A2A dispatch failed: ${error.message}`);
+    }
+
+    const fallbackSessionKey = `agent:${this.agentId}:task-${task.id}`;
+    const agentSessionKey =
+      dispatch?.response?.sessionKey ||
+      dispatch?.response?.agentSessionKey ||
+      fallbackSessionKey;
+
     this.activeAgents.set(task.id, agentSessionKey);
 
     return {
       agentSessionKey,
       taskId: task.id,
       worktreePath: worktree.path,
-      spawnedAt: new Date().toISOString()
+      spawnedAt: new Date().toISOString(),
+      dispatch: dispatch
+        ? {
+            method: dispatch.method,
+            attempts: dispatch.attempts,
+            usedFallback: dispatch.usedFallback,
+          }
+        : {
+            method: 'local-fallback',
+            attempts: 0,
+            usedFallback: true,
+          },
     };
   }
 
@@ -116,6 +154,13 @@ Begin now.
   }
 
   /**
+   * Get A2A dispatch metrics for timeout-rate checks.
+   */
+  getA2AStats() {
+    return this.a2aClient.getStats();
+  }
+
+  /**
    * Get agent result
    */
   getAgentResult(taskId) {
@@ -127,6 +172,10 @@ Begin now.
    */
   clearAgent(taskId) {
     this.activeAgents.delete(taskId);
+  }
+
+  async _defaultTransport() {
+    throw new Error('A2A transport not configured in this runtime');
   }
 }
 

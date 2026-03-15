@@ -149,6 +149,24 @@ All 3 test suites pass:
 - `test/phase6.test.js` — Multi-repo orchestration
 - `test/redteam-factory.test.js` — Production integration
 
+## A2A Reliability and Coordination
+
+A2A dispatch now includes timeout-aware retries with fallback routing:
+
+- Primary method: `sessions_send`
+- Retry policy: timeout-only retries with exponential backoff + jitter
+- Fallback method: `sessions_spawn` when retries are exhausted
+
+Run focused verification:
+
+```bash
+npm run test:a2a
+```
+
+Protocol and conflict rules for parallel work are documented in:
+
+- `docs/A2A-COORDINATION-PROTOCOL.md`
+
 ## Benchmark Policy
 
 SWE-bench Verified is the canonical capability metric for this factory.

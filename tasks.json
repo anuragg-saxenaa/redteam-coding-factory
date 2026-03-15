@@ -1,15 +1,8 @@
-{
-  "build": {
-    "description": "Build the project",
-    "commands": [
-      "npm install",
-      "npm run build"
-    ]
-  },
-  "test": {
-    "description": "Run tests",
-    "commands": [
-      "npm test"
-    ]
+[
+  {
+    "repo": "redteam-coding-factory",
+    "title": "Test Dashboard API",
+    "description": "Create a test task to verify dashboard API endpoints",
+    "force": false
   }
-}
+]

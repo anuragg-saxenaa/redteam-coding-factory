@@ -11,7 +11,8 @@
  * Config shape (factory.config.json):
  * {
  *   "dataDir": "/abs/path/.factory-data",
- *   "repos": [ { "name": "repo1", "path": "/abs/path/repo1", "branch": "main" } ]
+ *   "repos": [ { "name": "repo1", "path": "/abs/path/repo1", "branch": "main" } ],
+ *   "enableDashboard": true
  * }
  *
  * Tasks shape (tasks.json):
@@ -53,6 +54,7 @@ function usage(exitCode = 0) {
     '  --retry-budget Max retry budget across stages (watch mode; default: 6)',
     '  --max-tasks   Stop daemon after N processed issues (watch mode)',
     '  --max-polls   Stop daemon after N poll cycles (watch mode)',
+    '  --dashboard   Enable dashboard (default: true)',
     '  --help       Show this help',
     '',
   ].join('\n');
@@ -77,6 +79,7 @@ function parseArgs(argv) {
     else if (a === '--retry-budget') args.retryBudget = parseInt(argv[++i], 10);
     else if (a === '--max-tasks') args.maxTasks = parseInt(argv[++i], 10);
     else if (a === '--max-polls') args.maxPolls = parseInt(argv[++i], 10);
+    else if (a === '--dashboard') args.dashboard = argv[++i] === 'true';
     else args._.push(a);
   }
   return args;
@@ -137,6 +140,11 @@ async function main() {
   }
 
   const config = readJson(args.config);
+  
+  // Add dashboard config if not specified
+  if (typeof config.enableDashboard === 'undefined') {
+    config.enableDashboard = true;
+  }
 
   if (cmd === 'tasks') {
     if (!args.tasks) {
