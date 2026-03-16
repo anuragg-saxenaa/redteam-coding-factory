@@ -68,9 +68,23 @@ class RedTeamFactory {
    */
   initializeDashboard() {
     if (this.config.enableDashboard !== false) {
-      this.dashboard = new DashboardService(this);
+      const dashboardOptions = {
+        port: this.config.dashboardPort !== undefined ? this.config.dashboardPort : 3000,
+        dataDir: this.config.dataDir
+      };
+      this.dashboard = new DashboardService(this, dashboardOptions);
       this.dashboard.start();
       console.log('[RedTeamFactory] Dashboard service started');
+    }
+  }
+
+  /**
+   * Stop the factory and tear down the dashboard
+   */
+  async stop() {
+    if (this.dashboard) {
+      await this.dashboard.stop();
+      this.dashboard = null;
     }
   }
 
@@ -166,18 +180,7 @@ class RedTeamFactory {
     };
   }
 
-  /**
-   * Stop the factory and dashboard
-   */
-  stop() {
-    if (this.dashboard) {
-      this.dashboard.stop();
-    }
-    if (this.orchestrator) {
-      this.orchestrator.stop();
-    }
-    console.log('[RedTeamFactory] Factory stopped');
-  }
 }
+
 
 module.exports = RedTeamFactory;

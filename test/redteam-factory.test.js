@@ -47,74 +47,87 @@ function setupTestRepo() {
   console.log('✓ RedTeamFactory test environment setup complete');
 }
 
-async function test1_RedTeamFactoryInitialization() {
-  console.log('\n### Test 1: RedTeamFactory Initialization ###');
-  const factory = new RedTeamFactory({
+// Helper: create a factory with dashboardPort:0 (random free port) so tests don't conflict
+function makeTestFactory(extra = {}) {
+  return new RedTeamFactory({
     workspaceRoot: TEST_DIR,
     dataDir: DATA_DIR,
+    dashboardPort: 0,  // random free port — prevents EADDRINUSE across sequential tests
+    ...extra,
   });
+}
+
+async function test1_RedTeamFactoryInitialization() {
+  console.log('\n### Test 1: RedTeamFactory Initialization ###');
+  const factory = makeTestFactory();
 
   const repos = [{ name: 'redteam-repo1', path: REPO_1_BARE }];
   factory.initialize(repos);
 
-  if (!factory.orchestrator) throw new Error('Orchestrator not initialized');
-  if (factory.orchestrator.listRepos().length !== 1) throw new Error('Expected 1 repo in orchestrator');
-  console.log('✓ Test 1 passed: RedTeamFactory initialized and orchestrator set up');
+  try {
+    if (!factory.orchestrator) throw new Error('Orchestrator not initialized');
+    if (factory.orchestrator.listRepos().length !== 1) throw new Error('Expected 1 repo in orchestrator');
+    console.log('✓ Test 1 passed: RedTeamFactory initialized and orchestrator set up');
+  } finally {
+    await factory.stop();
+  }
 }
 
 async function test2_TaskSubmissionAndExecution() {
   console.log('\n### Test 2: Task Submission and Execution ###');
-  const factory = new RedTeamFactory({
-    workspaceRoot: TEST_DIR,
-    dataDir: DATA_DIR,
-  });
+  const factory = makeTestFactory();
 
   const repos = [{ name: 'redteam-repo1', path: REPO_1_BARE }];
   factory.initialize(repos);
 
-  const task = factory.submitTask('redteam-repo1', {
-    title: 'RedTeam Task',
-    description: 'A test task for the RedTeam factory',
-    repo: REPO_1_BARE,
-    branch: 'main'
-  });
+  try {
+    const task = factory.submitTask('redteam-repo1', {
+      title: 'RedTeam Task',
+      description: 'A test task for the RedTeam factory',
+      repo: REPO_1_BARE,
+      branch: 'main'
+    });
 
-  if (!task || !task.id) throw new Error('Task not submitted');
-  if (factory.getTaskHistory().length !== 1) throw new Error('Task not logged');
+    if (!task || !task.id) throw new Error('Task not submitted');
+    if (factory.getTaskHistory().length !== 1) throw new Error('Task not logged');
 
-  const results = await factory.run();
-  if (results.totalTasks === 0) throw new Error('Expected tasks to be processed');
-  if (factory.getResultHistory().length !== 1) throw new Error('Results not logged');
+    const results = await factory.run();
+    if (results.totalTasks === 0) throw new Error('Expected tasks to be processed');
+    if (factory.getResultHistory().length !== 1) throw new Error('Results not logged');
 
-  console.log('✓ Test 2 passed: RedTeamFactory submitted and executed tasks');
+    console.log('✓ Test 2 passed: RedTeamFactory submitted and executed tasks');
+  } finally {
+    await factory.stop();
+  }
 }
 
 async function test3_StateManagement() {
   console.log('\n### Test 3: State Management ###');
-  const factory = new RedTeamFactory({
-    workspaceRoot: TEST_DIR,
-    dataDir: DATA_DIR,
-  });
+  const factory = makeTestFactory();
 
   const repos = [{ name: 'redteam-repo1', path: REPO_1_BARE }];
   factory.initialize(repos);
 
-  factory.submitTask('redteam-repo1', {
-    title: 'RedTeam Task for State',
-    description: 'Another test task',
-    repo: REPO_1_BARE,
-    branch: 'main'
-  });
-  await factory.run();
+  try {
+    factory.submitTask('redteam-repo1', {
+      title: 'RedTeam Task for State',
+      description: 'Another test task',
+      repo: REPO_1_BARE,
+      branch: 'main'
+    });
+    await factory.run();
 
-  const statePath = path.join(DATA_DIR, 'redteam-factory-state.json');
-  factory.saveState(statePath);
+    const statePath = path.join(DATA_DIR, 'redteam-factory-state.json');
+    factory.saveState(statePath);
 
-  if (!fs.existsSync(statePath)) throw new Error('State file not saved');
-  const loadedState = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-  if (loadedState.taskLog.length === 0) throw new Error('Loaded state missing task log');
+    if (!fs.existsSync(statePath)) throw new Error('State file not saved');
+    const loadedState = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    if (loadedState.taskLog.length === 0) throw new Error('Loaded state missing task log');
 
-  console.log('✓ Test 3 passed: RedTeamFactory state saved and loaded');
+    console.log('✓ Test 3 passed: RedTeamFactory state saved and loaded');
+  } finally {
+    await factory.stop();
+  }
 }
 
 async function main() {

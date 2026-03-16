@@ -9,11 +9,14 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
 class DashboardService {
-  constructor(factory) {
+  constructor(factory, options = {}) {
     this.factory = factory;
     this.app = express();
-    this.port = 3000;
-    this.dataDir = './data';
+    // Allow port override via options or env; port=0 picks a random free port
+    this.port = options.port !== undefined ? options.port
+      : (process.env.DASHBOARD_PORT ? parseInt(process.env.DASHBOARD_PORT) : 3000);
+    this.dataDir = options.dataDir || './data';
+    this.server = null;
     
     this.initialize();
   }
@@ -203,17 +206,27 @@ class DashboardService {
   start() {
     return new Promise((resolve, reject) => {
       this.server = this.app.listen(this.port, () => {
+        // After bind, get the actual port (important when port=0)
+        this.port = this.server.address().port;
         console.log(`[DashboardService] Dashboard running on http://localhost:${this.port}`);
         resolve(this.server);
       });
+      this.server.on('error', reject);
     });
   }
 
   stop() {
-    if (this.server) {
-      this.server.close();
-      console.log('[DashboardService] Dashboard stopped');
-    }
+    return new Promise((resolve) => {
+      if (this.server) {
+        this.server.close(() => {
+          console.log('[DashboardService] Dashboard stopped');
+          this.server = null;
+          resolve();
+        });
+      } else {
+        resolve();
+      }
+    });
   }
 
   getServer() {
