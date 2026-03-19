@@ -313,12 +313,22 @@ class IssueWatcher {
         console.log(`[IssueWatcher] ✗ Issue #${issueNumber} failed: ${errorMsg}`);
 
         const remediationSummary = this._formatRemediationSummary(result?.executionResult);
+        const isRebaseConflict = /REBASE_CONFLICT/.test(errorMsg || '');
+        const conflictHint = isRebaseConflict
+          ? [
+              '**Detected rebase conflict while syncing with base branch.**',
+              'Autonomous merge was stopped. Please rebase manually or split conflicting changes before retry.',
+            ].join('\n')
+          : null;
+
         this.intake.commentOnIssue(
           issueNumber,
           [
             `❌ **Factory failed on this task** (${durationStr})`,
             '',
             `Error: ${errorMsg}`,
+            conflictHint ? '' : null,
+            conflictHint,
             remediationSummary ? '' : null,
             remediationSummary || null,
             '',

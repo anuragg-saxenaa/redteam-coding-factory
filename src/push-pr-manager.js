@@ -14,6 +14,43 @@ class PushPRManager {
     this.criticGate = new CriticGate(taskManager);
     this.enablePush = config.enablePush || false; // default to false
     this.gitHubCliPath = config.gitHubCliPath || 'gh'; // Path to gh CLI
+    this.execSync = config.execSync || execSync;
+  }
+
+  _run(command, options = {}) {
+    return this.execSync(command, options);
+  }
+
+  _formatExecError(error) {
+    const stdout = error && error.stdout ? error.stdout.toString() : '';
+    const stderr = error && error.stderr ? error.stderr.toString() : '';
+    const message = error && error.message ? error.message : 'unknown error';
+    return [message, stderr, stdout].filter(Boolean).join('\n').trim();
+  }
+
+  syncWithBaseBranch(wtPath, baseBranch = 'main') {
+    const currentBranch = this._run(`git -C ${wtPath} rev-parse --abbrev-ref HEAD`).toString().trim();
+
+    try {
+      console.log(`[PushPRManager] Syncing ${currentBranch} with origin/${baseBranch}...`);
+      this._run(`git -C ${wtPath} fetch origin ${baseBranch}`, { stdio: 'pipe' });
+      this._run(`git -C ${wtPath} rebase origin/${baseBranch}`, { stdio: 'pipe' });
+      return currentBranch;
+    } catch (error) {
+      const details = this._formatExecError(error);
+      const isConflict = /conflict|could not apply|resolve all conflicts/i.test(details);
+
+      if (isConflict) {
+        try {
+          this._run(`git -C ${wtPath} rebase --abort`, { stdio: 'pipe' });
+        } catch (_) {
+          // best effort
+        }
+        throw new Error(`[PushPRManager] REBASE_CONFLICT: ${details}`);
+      }
+
+      throw new Error(`[PushPRManager] Rebase failed: ${details}`);
+    }
   }
 
   /**
@@ -45,28 +82,30 @@ class PushPRManager {
       throw new Error(`[PushPRManager] Push/PR disabled by configuration. Set enablePush: true or use forceMode: true to override.`);
     }
     
-    // Step 2: Push changes
-    const currentBranch = execSync(`git -C ${wt.path} rev-parse --abbrev-ref HEAD`).toString().trim();
+    // Step 2: Sync with base branch before pushing (conflict/rebase reaction)
+    const currentBranch = this.syncWithBaseBranch(wt.path, task.branch || 'main');
+
+    // Step 3: Push changes
     try {
       console.log(`[PushPRManager] Pushing branch ${currentBranch} from ${wt.path}...`);
-      execSync(`git -C ${wt.path} push origin ${currentBranch}`, { stdio: 'inherit' });
+      this._run(`git -C ${wt.path} push origin ${currentBranch}`, { stdio: 'inherit' });
       console.log(`[PushPRManager] Push successful for task ${task.id}.`);
     } catch (error) {
-      throw new Error(`[PushPRManager] Git push failed: ${error.message}`);
+      throw new Error(`[PushPRManager] Git push failed: ${this._formatExecError(error)}`);
     }
 
     if (!createPR) {
       return { success: true, message: `Pushed changes for task ${task.id} to ${currentBranch}.` };
     }
 
-    // Step 3: Create PR using GitHub CLI
+    // Step 4: Create PR using GitHub CLI
     try {
       console.log(`[PushPRManager] Creating PR for task ${task.id}...`);
       const prBody = this.criticGate.generatePRBody(task, evaluation);
       const prTitle = `[${task.title}] - Task ${task.id}`;
 
       const ghCommand = `${this.gitHubCliPath} pr create --title "${prTitle}" --body "${prBody}" --repo ${task.repo}`;
-      const prOutput = execSync(ghCommand, { stdio: 'pipe' }).toString().trim();
+      const prOutput = this._run(ghCommand, { stdio: 'pipe' }).toString().trim();
       
       const prUrlMatch = prOutput.match(/https:\/\/github\.com\/.*\/pull\/\d+/);
       const prUrl = prUrlMatch ? prUrlMatch[0] : 'N/A';
@@ -74,7 +113,7 @@ class PushPRManager {
       console.log(`[PushPRManager] PR created: ${prUrl}`);
       return { success: true, message: `PR created for task ${task.id}.`, prUrl };
     } catch (error) {
-      throw new Error(`[PushPRManager] GitHub PR creation failed: ${error.message}`);
+      throw new Error(`[PushPRManager] GitHub PR creation failed: ${this._formatExecError(error)}`);
     }
   }
 }
