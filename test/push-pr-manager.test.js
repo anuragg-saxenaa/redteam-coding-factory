@@ -35,7 +35,7 @@ function createTask() {
   };
 }
 
-function createManager(execSyncImpl) {
+function createManager(execSyncImpl, extraConfig = {}) {
   const wt = {
     getByTaskId: () => ({ path: '/tmp/worktree-task-123' }),
   };
@@ -47,6 +47,7 @@ function createManager(execSyncImpl) {
   return new PushPRManager(wt, tm, {
     enablePush: true,
     execSync: execSyncImpl,
+    ...extraConfig,
   });
 }
 
@@ -59,7 +60,7 @@ console.log('Test 1: syncWithBaseBranch executes fetch + rebase');
       return Buffer.from('worktree/fix-1\n');
     }
     return Buffer.from('');
-  });
+  }, { enableSecurityDiffScan: false });
 
   const branch = manager.syncWithBaseBranch('/tmp/worktree-task-123', 'main');
   ok(branch === 'worktree/fix-1', 'returns current branch name');
@@ -81,7 +82,7 @@ console.log('Test 2: syncWithBaseBranch surfaces REBASE_CONFLICT and aborts reba
       throw err;
     }
     return Buffer.from('');
-  });
+  }, { enableSecurityDiffScan: false });
 
   let threw = false;
   try {
@@ -95,13 +96,19 @@ console.log('Test 2: syncWithBaseBranch surfaces REBASE_CONFLICT and aborts reba
   ok(commands.some((c) => c.includes('rebase --abort')), 'attempts rebase --abort after conflict');
 }
 
-console.log('Test 3: createPushPR runs sync + push for successful validation');
+console.log('Test 3: createPushPR runs sync + security scan + push for successful validation');
 {
   const commands = [];
   const manager = createManager((cmd) => {
     commands.push(cmd);
     if (cmd.includes('rev-parse --abbrev-ref HEAD')) {
       return Buffer.from('worktree/fix-3\n');
+    }
+    if (cmd.includes('merge-base HEAD origin/main')) {
+      return Buffer.from('abc123\n');
+    }
+    if (cmd.includes('diff --name-only abc123..HEAD')) {
+      return Buffer.from('src/index.js\nREADME.md\n');
     }
     return Buffer.from('');
   });
@@ -112,7 +119,37 @@ console.log('Test 3: createPushPR runs sync + push for successful validation');
   ok(result.success === true, 'returns success');
   ok(commands.some((c) => c.includes('fetch origin main')), 'sync step fetches base branch');
   ok(commands.some((c) => c.includes('rebase origin/main')), 'sync step rebases on base branch');
+  ok(commands.some((c) => c.includes('diff --name-only abc123..HEAD')), 'runs security diff scan before push');
   ok(commands.some((c) => c.includes('push origin worktree/fix-3')), 'pushes current branch to origin');
+}
+
+console.log('Test 4: createPushPR escalates on risky diff files');
+{
+  const commands = [];
+  const manager = createManager((cmd) => {
+    commands.push(cmd);
+    if (cmd.includes('rev-parse --abbrev-ref HEAD')) {
+      return Buffer.from('worktree/fix-4\n');
+    }
+    if (cmd.includes('merge-base HEAD origin/main')) {
+      return Buffer.from('def456\n');
+    }
+    if (cmd.includes('diff --name-only def456..HEAD')) {
+      return Buffer.from('.github/workflows/pipeline.yml\n');
+    }
+    return Buffer.from('');
+  });
+
+  let threw = false;
+  try {
+    manager.createPushPR(createTask(), { createPR: false });
+  } catch (error) {
+    threw = true;
+    ok(/SECURITY_ESCALATION/.test(error.message), 'throws SECURITY_ESCALATION marker');
+  }
+
+  ok(threw, 'blocks push when risky workflow diff is detected');
+  ok(!commands.some((c) => c.includes('push origin')), 'does not push when security scan escalates');
 }
 
 console.log('');

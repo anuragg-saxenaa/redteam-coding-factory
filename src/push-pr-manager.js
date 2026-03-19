@@ -15,6 +15,7 @@ class PushPRManager {
     this.enablePush = config.enablePush || false; // default to false
     this.gitHubCliPath = config.gitHubCliPath || 'gh'; // Path to gh CLI
     this.execSync = config.execSync || execSync;
+    this.enableSecurityDiffScan = config.enableSecurityDiffScan ?? true;
   }
 
   _run(command, options = {}) {
@@ -26,6 +27,47 @@ class PushPRManager {
     const stderr = error && error.stderr ? error.stderr.toString() : '';
     const message = error && error.message ? error.message : 'unknown error';
     return [message, stderr, stdout].filter(Boolean).join('\n').trim();
+  }
+
+  _collectDiffFiles(wtPath, baseBranch = 'main') {
+    try {
+      const mergeBase = this._run(`git -C ${wtPath} merge-base HEAD origin/${baseBranch}`).toString().trim();
+      const output = this._run(`git -C ${wtPath} diff --name-only ${mergeBase}..HEAD`).toString().trim();
+      if (!output) return [];
+      return output.split('\n').map((line) => line.trim()).filter(Boolean);
+    } catch (error) {
+      throw new Error(`[PushPRManager] Security scan failed while collecting diff files: ${this._formatExecError(error)}`);
+    }
+  }
+
+  _evaluateSecurityRisk(diffFiles = []) {
+    const secretFilePattern = /(^|\/)(\.env(\.|$)|\.npmrc$|\.pypirc$|id_rsa$|id_ed25519$|.*\.pem$|.*\.key$|.*\.p12$|.*\.pfx$)/i;
+    const workflowPattern = /(^|\/)\.github\/workflows\/.*\.ya?ml$/i;
+    const ciScriptPattern = /(^|\/)(scripts|ops)\/.+\.(sh|bash|ps1)$/i;
+
+    const risky = [];
+    for (const file of diffFiles) {
+      if (secretFilePattern.test(file)) {
+        risky.push({ file, reason: 'potential-secret-material' });
+      } else if (workflowPattern.test(file)) {
+        risky.push({ file, reason: 'ci-workflow-change' });
+      } else if (ciScriptPattern.test(file)) {
+        risky.push({ file, reason: 'ci-script-change' });
+      }
+    }
+
+    return {
+      hasRisk: risky.length > 0,
+      risky,
+    };
+  }
+
+  scanSecurityDiff(wtPath, baseBranch = 'main') {
+    const files = this._collectDiffFiles(wtPath, baseBranch);
+    return {
+      files,
+      ...this._evaluateSecurityRisk(files),
+    };
   }
 
   syncWithBaseBranch(wtPath, baseBranch = 'main') {
@@ -82,10 +124,23 @@ class PushPRManager {
       throw new Error(`[PushPRManager] Push/PR disabled by configuration. Set enablePush: true or use forceMode: true to override.`);
     }
     
-    // Step 2: Sync with base branch before pushing (conflict/rebase reaction)
-    const currentBranch = this.syncWithBaseBranch(wt.path, task.branch || 'main');
+    const baseBranch = task.branch || 'main';
 
-    // Step 3: Push changes
+    // Step 2: Sync with base branch before pushing (conflict/rebase reaction)
+    const currentBranch = this.syncWithBaseBranch(wt.path, baseBranch);
+
+    // Step 3: Security diff scan + escalation before push
+    if (this.enableSecurityDiffScan) {
+      const securityScan = this.scanSecurityDiff(wt.path, baseBranch);
+      if (securityScan.hasRisk) {
+        const details = securityScan.risky
+          .map((entry) => `${entry.file} (${entry.reason})`)
+          .join(', ');
+        throw new Error(`[PushPRManager] SECURITY_ESCALATION: sensitive diff detected. ${details}. Escalate to INFOSEC/RED for manual review before push.`);
+      }
+    }
+
+    // Step 4: Push changes
     try {
       console.log(`[PushPRManager] Pushing branch ${currentBranch} from ${wt.path}...`);
       this._run(`git -C ${wt.path} push origin ${currentBranch}`, { stdio: 'inherit' });
