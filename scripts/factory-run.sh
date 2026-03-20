@@ -6,6 +6,8 @@
 
 set -euo pipefail
 
+RUN_START_EPOCH="$(date +%s)"
+
 BASE_REPO_DEFAULT="/Users/redinside/Development/Codebase/projects/RedTeam/github/redteam-coding-factory"
 BASE_REPO="${BASE_REPO_DEFAULT}"
 BASE_BRANCH="main"
@@ -18,6 +20,7 @@ CREATE_PR="false"
 PR_BASE_BRANCH=""
 WATCH_CI="true"
 CI_MAX_FIX_ATTEMPTS=3
+METRICS_FILE_RELATIVE="ops/metrics.json"
 
 usage() {
   cat <<'EOF'
@@ -376,6 +379,7 @@ run_ci_reaction_loop() {
       fi
 
       fix_attempt=$((fix_attempt + 1))
+      CI_REMEDIATION_ATTEMPTS="$fix_attempt"
       local failure_summary
       failure_summary="$(summarize_failed_checks "$pr_ref")"
       echo "🔁 CI failed; remediation attempt ${fix_attempt}/${CI_MAX_FIX_ATTEMPTS}"
@@ -408,6 +412,77 @@ run_ci_reaction_loop() {
   done
 }
 
+append_metrics() {
+  local result="$1"
+  local attempts="$2"
+  local duration_sec
+  duration_sec=$(( $(date +%s) - RUN_START_EPOCH ))
+
+  local metrics_file="${BASE_REPO}/${METRICS_FILE_RELATIVE}"
+  mkdir -p "$(dirname "$metrics_file")"
+
+  local ts ci_result ci_last_error
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  ci_result="not_run"
+  ci_last_error=""
+
+  if [[ "$PR_STATUS" == "created" && "$WATCH_CI" == "true" ]]; then
+    if [[ "$result" == "success" ]]; then
+      ci_result="pass"
+    else
+      ci_result="fail"
+      ci_last_error="$ESCALATION_REASON"
+    fi
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    METRICS_FILE="$metrics_file" \
+    METRICS_TS="$ts" \
+    METRICS_TASK="$TASK_DESC" \
+    METRICS_BRANCH="$WORKTREE_BRANCH" \
+    METRICS_DURATION="$duration_sec" \
+    METRICS_RESULT="$result" \
+    METRICS_ATTEMPTS="$attempts" \
+    METRICS_CREATE_PR="$CREATE_PR" \
+    METRICS_PR_URL="$PR_URL" \
+    METRICS_CI_RESULT="$ci_result" \
+    METRICS_CI_LAST_ERROR="$ci_last_error" \
+    node <<'NODE'
+const fs = require('fs');
+
+const file = process.env.METRICS_FILE;
+const entry = {
+  timestamp: process.env.METRICS_TS,
+  task: process.env.METRICS_TASK,
+  branch: process.env.METRICS_BRANCH,
+  durationSec: Number(process.env.METRICS_DURATION || '0'),
+  result: process.env.METRICS_RESULT,
+  passFail: process.env.METRICS_RESULT,
+  attempts: Number(process.env.METRICS_ATTEMPTS || '1'),
+  createPr: process.env.METRICS_CREATE_PR === 'true',
+  prUrl: process.env.METRICS_PR_URL || '',
+  ciResult: process.env.METRICS_CI_RESULT || 'not_run',
+  ciLastError: process.env.METRICS_CI_LAST_ERROR || ''
+};
+
+let data = [];
+if (fs.existsSync(file)) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (Array.isArray(parsed)) data = parsed;
+  } catch {
+    data = [];
+  }
+}
+
+data.push(entry);
+fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
+NODE
+  else
+    echo "metrics_write_skipped: node_not_found" >> "$AGENT_LOG"
+  fi
+}
+
 AGENT_EXIT=0
 CHECK_EXIT=0
 SELF_FIX_ATTEMPTED=0
@@ -416,6 +491,7 @@ ESCALATION_REQUIRED="false"
 ESCALATION_REASON=""
 PR_STATUS="skipped"
 PR_URL=""
+CI_REMEDIATION_ATTEMPTS=0
 
 if ! run_agent "initial"; then
   AGENT_EXIT=$?
@@ -451,6 +527,14 @@ CHANGED_FILES="$(git -C "$WORKTREE_PATH" status --short | wc -l | tr -d ' ')"
 RESULT="success"
 if [[ $AGENT_EXIT -ne 0 || $CHECK_EXIT -ne 0 || $SELF_FIX_EXIT -ne 0 ]]; then
   RESULT="failed"
+fi
+
+TOTAL_ATTEMPTS=1
+if [[ "$SELF_FIX_ATTEMPTED" -eq 1 ]]; then
+  TOTAL_ATTEMPTS=$((TOTAL_ATTEMPTS + 1))
+fi
+if [[ "$CI_REMEDIATION_ATTEMPTS" -gt 0 ]]; then
+  TOTAL_ATTEMPTS=$((TOTAL_ATTEMPTS + CI_REMEDIATION_ATTEMPTS))
 fi
 
 if [[ "$RESULT" == "failed" ]]; then
@@ -503,12 +587,16 @@ create_pr=${CREATE_PR}
 pr_status=${PR_STATUS}
 pr_url=${PR_URL}
 changed_files=${CHANGED_FILES}
+attempts=${TOTAL_ATTEMPTS}
 result=${RESULT}
 log=${AGENT_LOG}
 EOF
 
+append_metrics "$RESULT" "$TOTAL_ATTEMPTS"
+
 echo "📋 Agent log: ${AGENT_LOG}"
 echo "🧾 Status file: ${STATUS_FILE}"
+echo "📈 Metrics file: ${BASE_REPO}/${METRICS_FILE_RELATIVE}"
 echo "✅ Done: ${RESULT}"
 
 if [[ "$RESULT" == "failed" ]]; then
