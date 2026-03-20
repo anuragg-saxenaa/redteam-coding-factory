@@ -21,6 +21,7 @@ PR_BASE_BRANCH=""
 WATCH_CI="true"
 CI_MAX_FIX_ATTEMPTS=3
 METRICS_FILE_RELATIVE="ops/metrics.json"
+CLEANUP_WORKTREE="on-success"   # never|on-success|always
 
 usage() {
   cat <<'EOF'
@@ -39,6 +40,8 @@ Options:
   --pr-base <branch>       PR base branch (default: --base-branch)
   --no-watch-ci            Disable CI reaction loop after PR creation
   --ci-max-fix-attempts N  Max CI remediation attempts (default: 3)
+  --cleanup-worktree <m>   never|on-success|always (default: on-success)
+  --keep-worktree          Alias for --cleanup-worktree never
   -h, --help               Show help
 
 Examples:
@@ -96,6 +99,14 @@ while [[ $# -gt 0 ]]; do
       CI_MAX_FIX_ATTEMPTS="$2"
       shift 2
       ;;
+    --cleanup-worktree)
+      CLEANUP_WORKTREE="$2"
+      shift 2
+      ;;
+    --keep-worktree)
+      CLEANUP_WORKTREE="never"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -129,8 +140,13 @@ WORKTREE_BRANCH="worktree-${WORKTREE_NAME}"
 WORKTREE_BASE="${WORKTREE_BASE:-${BASE_REPO}/.worktrees}"
 WORKTREE_PATH="${WORKTREE_BASE}/${WORKTREE_NAME}"
 STATUS_FILE="${WORKTREE_BASE}/${WORKTREE_NAME}.status"
-AGENT_LOG="${WORKTREE_PATH}/agent-run.log"
+AGENT_LOG="${WORKTREE_BASE}/${WORKTREE_NAME}.agent.log"
 PR_BASE_BRANCH="${PR_BASE_BRANCH:-$BASE_BRANCH}"
+
+if [[ "$CLEANUP_WORKTREE" != "never" && "$CLEANUP_WORKTREE" != "on-success" && "$CLEANUP_WORKTREE" != "always" ]]; then
+  echo "Error: invalid --cleanup-worktree mode '$CLEANUP_WORKTREE' (expected never|on-success|always)" >&2
+  exit 1
+fi
 
 mkdir -p "$WORKTREE_BASE"
 
@@ -412,6 +428,31 @@ run_ci_reaction_loop() {
   done
 }
 
+cleanup_worktree_if_needed() {
+  local result="$1"
+
+  case "$CLEANUP_WORKTREE" in
+    never)
+      WORKTREE_CLEANUP="skipped"
+      return 0
+      ;;
+    on-success)
+      if [[ "$result" != "success" ]]; then
+        WORKTREE_CLEANUP="skipped"
+        return 0
+      fi
+      ;;
+    always)
+      ;;
+  esac
+
+  if git -C "$BASE_REPO" worktree remove --force "$WORKTREE_PATH" >> "$AGENT_LOG" 2>&1; then
+    WORKTREE_CLEANUP="removed"
+  else
+    WORKTREE_CLEANUP="failed"
+  fi
+}
+
 append_metrics() {
   local result="$1"
   local attempts="$2"
@@ -492,6 +533,7 @@ ESCALATION_REASON=""
 PR_STATUS="skipped"
 PR_URL=""
 CI_REMEDIATION_ATTEMPTS=0
+WORKTREE_CLEANUP="skipped"
 
 if ! run_agent "initial"; then
   AGENT_EXIT=$?
@@ -568,6 +610,10 @@ fi
   echo "Result: $RESULT"
 } >> "$AGENT_LOG"
 
+append_metrics "$RESULT" "$TOTAL_ATTEMPTS"
+
+cleanup_worktree_if_needed "$RESULT"
+
 cat > "$STATUS_FILE" <<EOF
 run_id=${WORKTREE_NAME}
 created_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -589,14 +635,15 @@ pr_url=${PR_URL}
 changed_files=${CHANGED_FILES}
 attempts=${TOTAL_ATTEMPTS}
 result=${RESULT}
+cleanup_mode=${CLEANUP_WORKTREE}
+cleanup_status=${WORKTREE_CLEANUP}
 log=${AGENT_LOG}
 EOF
-
-append_metrics "$RESULT" "$TOTAL_ATTEMPTS"
 
 echo "📋 Agent log: ${AGENT_LOG}"
 echo "🧾 Status file: ${STATUS_FILE}"
 echo "📈 Metrics file: ${BASE_REPO}/${METRICS_FILE_RELATIVE}"
+echo "🧹 Worktree cleanup: ${WORKTREE_CLEANUP} (${CLEANUP_WORKTREE})"
 echo "✅ Done: ${RESULT}"
 
 if [[ "$RESULT" == "failed" ]]; then
