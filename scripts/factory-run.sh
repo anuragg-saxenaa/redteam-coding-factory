@@ -20,6 +20,9 @@ CREATE_PR="false"
 PR_BASE_BRANCH=""
 WATCH_CI="true"
 CI_MAX_FIX_ATTEMPTS=3
+RUN_TYPECHECK="auto"        # auto|true|false
+RUN_SECURITY_SCAN="false"   # false by default to avoid blocking on advisory DB drift
+NPM_AUDIT_LEVEL="high"
 METRICS_FILE_RELATIVE="ops/metrics.json"
 CLEANUP_WORKTREE="on-success"   # never|on-success|always
 
@@ -40,6 +43,9 @@ Options:
   --pr-base <branch>       PR base branch (default: --base-branch)
   --no-watch-ci            Disable CI reaction loop after PR creation
   --ci-max-fix-attempts N  Max CI remediation attempts (default: 3)
+  --typecheck <mode>       auto|true|false (default: auto)
+  --security-scan          Run npm audit gate (high+ severity by default)
+  --npm-audit-level <lvl>  npm audit level: low|moderate|high|critical (default: high)
   --cleanup-worktree <m>   never|on-success|always (default: on-success)
   --keep-worktree          Alias for --cleanup-worktree never
   -h, --help               Show help
@@ -99,6 +105,18 @@ while [[ $# -gt 0 ]]; do
       CI_MAX_FIX_ATTEMPTS="$2"
       shift 2
       ;;
+    --typecheck)
+      RUN_TYPECHECK="$2"
+      shift 2
+      ;;
+    --security-scan)
+      RUN_SECURITY_SCAN="true"
+      shift
+      ;;
+    --npm-audit-level)
+      NPM_AUDIT_LEVEL="$2"
+      shift 2
+      ;;
     --cleanup-worktree)
       CLEANUP_WORKTREE="$2"
       shift 2
@@ -145,6 +163,16 @@ PR_BASE_BRANCH="${PR_BASE_BRANCH:-$BASE_BRANCH}"
 
 if [[ "$CLEANUP_WORKTREE" != "never" && "$CLEANUP_WORKTREE" != "on-success" && "$CLEANUP_WORKTREE" != "always" ]]; then
   echo "Error: invalid --cleanup-worktree mode '$CLEANUP_WORKTREE' (expected never|on-success|always)" >&2
+  exit 1
+fi
+
+if [[ "$RUN_TYPECHECK" != "auto" && "$RUN_TYPECHECK" != "true" && "$RUN_TYPECHECK" != "false" ]]; then
+  echo "Error: invalid --typecheck mode '$RUN_TYPECHECK' (expected auto|true|false)" >&2
+  exit 1
+fi
+
+if [[ "$NPM_AUDIT_LEVEL" != "low" && "$NPM_AUDIT_LEVEL" != "moderate" && "$NPM_AUDIT_LEVEL" != "high" && "$NPM_AUDIT_LEVEL" != "critical" ]]; then
+  echo "Error: invalid --npm-audit-level '$NPM_AUDIT_LEVEL' (expected low|moderate|high|critical)" >&2
   exit 1
 fi
 
@@ -244,17 +272,51 @@ ${extra_context}"
 
 run_checks() {
   local lint_rc=0
+  local typecheck_rc=0
   local test_rc=0
+  local security_rc=0
 
   if [[ "$SKIP_TESTS" == "true" ]]; then
     echo "⏭️  Skipping lint/tests (--skip-tests)"
     return 0
   fi
 
+  local has_node_project="false"
   if [[ -f "$WORKTREE_PATH/package.json" ]] && command -v node >/dev/null 2>&1; then
+    has_node_project="true"
+
     if node -e 'const p=require("./package.json"); process.exit(p.scripts&&p.scripts.lint?0:1)' >/dev/null 2>&1; then
       echo "🧹 Running npm run lint --silent"
       (cd "$WORKTREE_PATH" && npm run lint --silent) >> "$AGENT_LOG" 2>&1 || lint_rc=$?
+    fi
+
+    local should_typecheck="false"
+    case "$RUN_TYPECHECK" in
+      true) should_typecheck="true" ;;
+      false) should_typecheck="false" ;;
+      auto)
+        if node -e 'const p=require("./package.json"); process.exit((p.scripts&&((p.scripts.typecheck)||(p.scripts["type-check"])||(p.scripts.tsc)))?0:1)' >/dev/null 2>&1; then
+          should_typecheck="true"
+        elif [[ -f "$WORKTREE_PATH/tsconfig.json" ]]; then
+          should_typecheck="true"
+        fi
+        ;;
+    esac
+
+    if [[ "$should_typecheck" == "true" ]]; then
+      if node -e 'const p=require("./package.json"); process.exit(p.scripts&&p.scripts.typecheck?0:1)' >/dev/null 2>&1; then
+        echo "🔎 Running npm run typecheck --silent"
+        (cd "$WORKTREE_PATH" && npm run typecheck --silent) >> "$AGENT_LOG" 2>&1 || typecheck_rc=$?
+      elif node -e 'const p=require("./package.json"); process.exit(p.scripts&&p.scripts["type-check"]?0:1)' >/dev/null 2>&1; then
+        echo "🔎 Running npm run type-check --silent"
+        (cd "$WORKTREE_PATH" && npm run type-check --silent) >> "$AGENT_LOG" 2>&1 || typecheck_rc=$?
+      elif node -e 'const p=require("./package.json"); process.exit(p.scripts&&p.scripts.tsc?0:1)' >/dev/null 2>&1; then
+        echo "🔎 Running npm run tsc --silent"
+        (cd "$WORKTREE_PATH" && npm run tsc --silent) >> "$AGENT_LOG" 2>&1 || typecheck_rc=$?
+      elif command -v npx >/dev/null 2>&1 && [[ -f "$WORKTREE_PATH/tsconfig.json" ]]; then
+        echo "🔎 Running npx tsc --noEmit"
+        (cd "$WORKTREE_PATH" && npx --yes tsc --noEmit) >> "$AGENT_LOG" 2>&1 || typecheck_rc=$?
+      fi
     fi
 
     if node -e 'const p=require("./package.json"); process.exit(p.scripts&&p.scripts.test?0:1)' >/dev/null 2>&1; then
@@ -268,7 +330,12 @@ run_checks() {
     (cd "$WORKTREE_PATH" && pytest -q) >> "$AGENT_LOG" 2>&1 || test_rc=$?
   fi
 
-  if [[ $lint_rc -ne 0 || $test_rc -ne 0 ]]; then
+  if [[ "$RUN_SECURITY_SCAN" == "true" && "$has_node_project" == "true" && "$lint_rc" -eq 0 && "$typecheck_rc" -eq 0 && "$test_rc" -eq 0 ]]; then
+    echo "🛡️  Running npm audit --audit-level=${NPM_AUDIT_LEVEL}"
+    (cd "$WORKTREE_PATH" && npm audit --audit-level="$NPM_AUDIT_LEVEL") >> "$AGENT_LOG" 2>&1 || security_rc=$?
+  fi
+
+  if [[ $lint_rc -ne 0 || $typecheck_rc -ne 0 || $test_rc -ne 0 || $security_rc -ne 0 ]]; then
     return 1
   fi
   return 0
