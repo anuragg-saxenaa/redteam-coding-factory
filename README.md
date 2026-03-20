@@ -129,7 +129,7 @@ This script includes:
 
 ## Architecture
 
-- **Phase 1**: Task intake + worktree isolation
+- **Phase 1**: Task intake + worktree isolation (+ run metrics + optional Slack #redos-eng summary via webhook)
 - **Phase 2**: Code execution (lint, test, commit)
 - **Phase 3**: Agent integration + autonomous loop
 - **Phase 4**: Result validation + feedback loop

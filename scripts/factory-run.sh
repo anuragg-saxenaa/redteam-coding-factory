@@ -25,6 +25,8 @@ RUN_SECURITY_SCAN="false"   # false by default to avoid blocking on advisory DB 
 NPM_AUDIT_LEVEL="high"
 METRICS_FILE_RELATIVE="ops/metrics.json"
 CLEANUP_WORKTREE="on-success"   # never|on-success|always
+SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
+SLACK_POST_STATUS="skipped"
 
 usage() {
   cat <<'EOF'
@@ -48,6 +50,7 @@ Options:
   --npm-audit-level <lvl>  npm audit level: low|moderate|high|critical (default: high)
   --cleanup-worktree <m>   never|on-success|always (default: on-success)
   --keep-worktree          Alias for --cleanup-worktree never
+  --slack-webhook-url <u>  Override Slack webhook URL for #redos-eng summary post
   -h, --help               Show help
 
 Examples:
@@ -124,6 +127,10 @@ while [[ $# -gt 0 ]]; do
     --keep-worktree)
       CLEANUP_WORKTREE="never"
       shift
+      ;;
+    --slack-webhook-url)
+      SLACK_WEBHOOK_URL="$2"
+      shift 2
       ;;
     -h|--help)
       usage
@@ -591,6 +598,60 @@ NODE
   fi
 }
 
+post_slack_summary() {
+  local result="$1"
+  local attempts="$2"
+  local duration_sec
+  duration_sec=$(( $(date +%s) - RUN_START_EPOCH ))
+
+  if [[ -z "$SLACK_WEBHOOK_URL" ]]; then
+    SLACK_POST_STATUS="skipped"
+    echo "slack_post_skipped: webhook_not_configured" >> "$AGENT_LOG"
+    return 0
+  fi
+
+  if ! command -v curl >/dev/null 2>&1; then
+    SLACK_POST_STATUS="failed"
+    echo "slack_post_failed: curl_not_found" >> "$AGENT_LOG"
+    return 0
+  fi
+
+  local icon next_step pr_line esc_line msg payload rc
+  if [[ "$result" == "success" ]]; then
+    icon="✅"
+    next_step="Next: Continue with next Phase 1 hardening/automation increment."
+  else
+    icon="🚨"
+    next_step="Next: Investigate failures and unblock escalation path."
+  fi
+
+  pr_line="PR: ${PR_STATUS}"
+  if [[ -n "$PR_URL" ]]; then
+    pr_line="${pr_line} (${PR_URL})"
+  fi
+
+  esc_line="Blockers: None"
+  if [[ "$ESCALATION_REQUIRED" == "true" ]]; then
+    esc_line="Blockers: ${ESCALATION_REASON}"
+  fi
+
+  msg="${icon} *ENG R&D Update — $(date '+%Y-%m-%d %H:%M %Z')*\n- Built: ${TASK_DESC}\n- Committed: ${WORKTREE_BRANCH}\n- Result: ${result} (${duration_sec}s, attempts=${attempts})\n- ${pr_line}\n- ${next_step}\n- ${esc_line}"
+
+  payload=$(node -e 'const text=process.argv[1]; process.stdout.write(JSON.stringify({text}));' "$msg" 2>/dev/null || true)
+  if [[ -z "$payload" ]]; then
+    payload="{\"text\":\"Factory run update: ${result}\"}"
+  fi
+
+  rc=0
+  curl -sS -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" >> "$AGENT_LOG" 2>&1 || rc=$?
+  if [[ $rc -eq 0 ]]; then
+    SLACK_POST_STATUS="sent"
+  else
+    SLACK_POST_STATUS="failed"
+    echo "slack_post_failed: curl_exit=${rc}" >> "$AGENT_LOG"
+  fi
+}
+
 AGENT_EXIT=0
 CHECK_EXIT=0
 SELF_FIX_ATTEMPTED=0
@@ -675,9 +736,11 @@ fi
   echo "PR URL: $PR_URL"
   echo "Changed files: $CHANGED_FILES"
   echo "Result: $RESULT"
+  echo "Slack post status: $SLACK_POST_STATUS"
 } >> "$AGENT_LOG"
 
 append_metrics "$RESULT" "$TOTAL_ATTEMPTS"
+post_slack_summary "$RESULT" "$TOTAL_ATTEMPTS"
 
 cleanup_worktree_if_needed "$RESULT"
 
@@ -704,12 +767,14 @@ attempts=${TOTAL_ATTEMPTS}
 result=${RESULT}
 cleanup_mode=${CLEANUP_WORKTREE}
 cleanup_status=${WORKTREE_CLEANUP}
+slack_post_status=${SLACK_POST_STATUS}
 log=${AGENT_LOG}
 EOF
 
 echo "📋 Agent log: ${AGENT_LOG}"
 echo "🧾 Status file: ${STATUS_FILE}"
 echo "📈 Metrics file: ${BASE_REPO}/${METRICS_FILE_RELATIVE}"
+echo "💬 Slack post: ${SLACK_POST_STATUS}"
 echo "🧹 Worktree cleanup: ${WORKTREE_CLEANUP} (${CLEANUP_WORKTREE})"
 echo "✅ Done: ${RESULT}"
 
