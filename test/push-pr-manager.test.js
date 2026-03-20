@@ -90,6 +90,8 @@ console.log('Test 2: syncWithBaseBranch surfaces REBASE_CONFLICT and aborts reba
   } catch (error) {
     threw = true;
     ok(/REBASE_CONFLICT/.test(error.message), 'throws REBASE_CONFLICT marker');
+    ok(/branch=worktree\/fix-2/.test(error.message), 'conflict error includes branch context');
+    ok(/base=main/.test(error.message), 'conflict error includes base branch context');
   }
 
   ok(threw, 'throws on conflict');

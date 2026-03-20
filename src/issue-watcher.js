@@ -282,6 +282,8 @@ class IssueWatcher {
         this._stats.completed++;
         console.log(`[IssueWatcher] ✓ Issue #${issueNumber} completed in ${durationStr}`);
 
+        this._processedIssues.delete(issueNumber);
+
         const remediationSummary = this._formatRemediationSummary(result.executionResult);
         const successMsg = [
           `✅ **Factory completed this task** (${durationStr})`,
@@ -318,12 +320,18 @@ class IssueWatcher {
 
         const remediationSummary = this._formatRemediationSummary(result?.executionResult);
         const isRebaseConflict = /REBASE_CONFLICT/.test(errorMsg || '');
-        const conflictHint = isRebaseConflict
-          ? [
-              '**Detected rebase conflict while syncing with base branch.**',
-              'Autonomous merge was stopped. Please rebase manually or split conflicting changes before retry.',
-            ].join('\n')
-          : null;
+        let conflictHint = null;
+        if (isRebaseConflict) {
+          const branchMatch = /branch=([^\s;]+)/.exec(errorMsg || '');
+          const baseMatch = /base=([^\s;]+)/.exec(errorMsg || '');
+          const branch = branchMatch ? branchMatch[1] : 'unknown';
+          const base = baseMatch ? baseMatch[1] : 'unknown';
+          conflictHint = [
+            '**Detected rebase conflict while syncing with base branch.**',
+            `Conflict context: branch=\`${branch}\`, base=\`${base}\``,
+            'Autonomous merge was stopped. Please rebase manually or split conflicting changes before retry.',
+          ].join('\n');
+        }
 
         this.intake.commentOnIssue(
           issueNumber,
@@ -342,6 +350,7 @@ class IssueWatcher {
 
         // Remove in-progress label on failure so it can be retried
         this._removeInProgressLabel(issueNumber);
+        this._processedIssues.delete(issueNumber);
 
         if (this.onTaskFail) {
           try { this.onTaskFail(issueNumber, errorMsg); } catch (_) {}
@@ -360,6 +369,7 @@ class IssueWatcher {
       );
 
       this._removeInProgressLabel(issueNumber);
+      this._processedIssues.delete(issueNumber);
 
       if (this.onTaskFail) {
         try { this.onTaskFail(issueNumber, err.message); } catch (_) {}

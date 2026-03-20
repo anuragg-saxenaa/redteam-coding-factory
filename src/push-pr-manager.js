@@ -98,7 +98,7 @@ class PushPRManager {
         } catch (_) {
           // best effort
         }
-        throw new Error(`[PushPRManager] REBASE_CONFLICT: ${details}`);
+        throw new Error(`[PushPRManager] REBASE_CONFLICT: branch=${currentBranch} base=${baseBranch}; ${details}`);
       }
 
       throw new Error(`[PushPRManager] Rebase failed: ${details}`);

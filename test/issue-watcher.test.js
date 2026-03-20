@@ -211,6 +211,62 @@ console.log('Test 6: Stop sets state');
     else { console.error(`  ✗ expected 2 workers, got ${started}`); failed++; }
   }
 
+  // --- Test 11: Failed issue is eligible for re-processing ---
+  console.log('Test 11: failed issues are removed from processed cache');
+  {
+    const watcher = new IssueWatcher({
+      repo: 'test/repo',
+      repoPath: '/tmp/test-repo',
+    });
+
+    watcher.intake.commentOnIssue = () => {};
+    watcher._removeInProgressLabel = () => {};
+    watcher.factory.submitTask = () => ({ id: 'task-11' });
+    watcher.factory.processNext = async () => ({ failed: true, executionResult: { error: 'boom' } });
+
+    await watcher._processIssue({ title: 'Issue 11' }, 11);
+    if (watcher._processedIssues.has(11)) {
+      console.error('  ✗ failed issue should be removed from processed cache');
+      failed++;
+    } else {
+      console.log('  ✓ failed issue removed from processed cache');
+      passed++;
+    }
+  }
+
+  // --- Test 12: Rebase conflict comments include branch/base context ---
+  console.log('Test 12: conflict hint includes branch/base context');
+  {
+    const watcher = new IssueWatcher({
+      repo: 'test/repo',
+      repoPath: '/tmp/test-repo',
+    });
+
+    watcher.intake.commentOnIssue = () => {};
+    watcher._removeInProgressLabel = () => {};
+    watcher.factory.submitTask = () => ({ id: 'task-12' });
+
+    let failureComment = '';
+    watcher.intake.commentOnIssue = (_issueNumber, body) => {
+      failureComment = body;
+    };
+
+    watcher.factory.processNext = async () => ({
+      failed: true,
+      pushPRError: '[PushPRManager] REBASE_CONFLICT: branch=worktree/fix-4 base=main; conflict detected',
+    });
+
+    await watcher._processIssue({ title: 'Issue 12' }, 12);
+
+    if (/branch=`worktree\/fix-4`/.test(failureComment) && /base=`main`/.test(failureComment)) {
+      console.log('  ✓ conflict comment contains branch/base context');
+      passed++;
+    } else {
+      console.error('  ✗ conflict comment missing branch/base context');
+      failed++;
+    }
+  }
+
   // --- Summary ---
   console.log('');
   console.log(`=== Issue Watcher Tests: ${passed} passed, ${failed} failed ===`);
