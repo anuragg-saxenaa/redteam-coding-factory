@@ -21,9 +21,10 @@ class WorktreeManager {
    * Create a new worktree for a task.
    * @param {string} taskId - task UUID
    * @param {string} branch - branch name (default: main)
+   * @param {Object} options - metadata tags { owner?, ticketId?, labels? }
    * @returns {Object} - worktree record
    */
-  create(taskId, branch = 'main') {
+  create(taskId, branch = 'main', options = {}) {
     const id = uuidv4();
     const worktreePath = path.join(this.worktreeRoot, id);
     this.ensureWorktreeRoot();
@@ -66,12 +67,19 @@ class WorktreeManager {
       console.warn(`Failed to configure git identity in worktree: ${configError.message}`);
     }
 
+    const labels = Array.isArray(options.labels)
+      ? options.labels.map((label) => String(label).trim()).filter(Boolean)
+      : [];
+
     const record = {
       id,
       taskId,
       path: worktreePath,
       branch: resolvedBranch,
       baseBranch: branch,
+      owner: options.owner ? String(options.owner).trim() : 'eng',
+      ticketId: options.ticketId ? String(options.ticketId).trim() : taskId,
+      labels,
       createdAt: new Date().toISOString(),
       status: 'active',
     };
@@ -106,13 +114,21 @@ class WorktreeManager {
 
   /**
    * Remove a worktree (cleanup).
+   * @param {string} id
+   * @param {Object} options
+   * @param {boolean} options.force - pass --force to git worktree remove
    */
-  remove(id) {
+  remove(id, options = {}) {
     const wt = this.worktrees.get(id);
     if (!wt) throw new Error(`Worktree ${id} not found`);
 
+    const force = Boolean(options.force);
+    const args = ['-C', this.baseRepo, 'worktree', 'remove'];
+    if (force) args.push('--force');
+    args.push(wt.path);
+
     try {
-      execFileSync('git', ['-C', this.baseRepo, 'worktree', 'remove', wt.path], {
+      execFileSync('git', args, {
         stdio: 'pipe',
       });
       wt.status = 'removed';
@@ -189,6 +205,35 @@ class WorktreeManager {
     }
 
     return { staleMarked, dirsPruned };
+  }
+
+  /**
+   * Prune managed worktrees that are already removed/stale and older than the provided threshold.
+   * This keeps metadata small and avoids long-term drift from closed task branches.
+   *
+   * @param {Object} options
+   * @param {number} options.olderThanMs - minimum age (ms) from removedAt before pruning
+   * @returns {{ prunedRecords: number }}
+   */
+  pruneManaged(options = {}) {
+    const olderThanMs = Number.isFinite(options.olderThanMs) ? options.olderThanMs : 0;
+    const now = Date.now();
+
+    let prunedRecords = 0;
+    for (const [id, wt] of this.worktrees.entries()) {
+      if (wt.status !== 'removed' && wt.status !== 'stale') continue;
+      const removedAtMs = Date.parse(wt.removedAt || '');
+      if (!Number.isFinite(removedAtMs)) continue;
+      if ((now - removedAtMs) < olderThanMs) continue;
+      this.worktrees.delete(id);
+      prunedRecords += 1;
+    }
+
+    if (prunedRecords > 0) {
+      this.persistWorktrees();
+    }
+
+    return { prunedRecords };
   }
 
   ensureWorktreeRoot() {

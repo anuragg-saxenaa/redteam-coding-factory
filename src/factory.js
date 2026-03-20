@@ -83,7 +83,11 @@ class CodingFactory {
 
     try {
       // Phase 1: Create isolated worktree
-      const wt = this.worktreeManager.create(task.id, task.branch || 'main');
+      const wt = this.worktreeManager.create(task.id, task.branch || 'main', {
+        owner: task.assignee || task.owner || 'eng',
+        ticketId: task.ticketId || task.id,
+        labels: task.labels || [],
+      });
       console.log(`[Factory] Created worktree: ${wt.id} at ${wt.path}`);
 
       // Mark task as in_progress

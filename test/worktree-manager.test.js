@@ -43,19 +43,26 @@ function setupRepo() {
   );
   sh(`git -C ${BASE_CLONE} add .`);
   sh(`git -C ${BASE_CLONE} commit -m "initial"`);
-  sh(`git -C ${BASE_CLONE} checkout -b main`);
+  sh(`git -C ${BASE_CLONE} branch -M main`);
   sh(`git -C ${BASE_CLONE} push -u origin HEAD:main`);
 }
 
 function testCreateListRemovePersist() {
   const wm = new WorktreeManager(BASE_BARE, WT_ROOT);
 
-  const created = wm.create('task-1', 'main');
+  const created = wm.create('task-1', 'main', {
+    owner: 'eng',
+    ticketId: 'TICKET-20260320-033',
+    labels: ['phase1', 'worktree-isolation'],
+  });
   assert(created.id, 'created record should include id');
   assert(fs.existsSync(created.path), 'worktree path should exist after create');
 
   const activeList = wm.list({ status: 'active' });
   assert.strictEqual(activeList.length, 1, 'should list one active worktree');
+  assert.strictEqual(created.owner, 'eng', 'created record should persist owner metadata');
+  assert.strictEqual(created.ticketId, 'TICKET-20260320-033', 'created record should persist ticketId metadata');
+  assert.deepStrictEqual(created.labels, ['phase1', 'worktree-isolation'], 'created record should persist labels metadata');
 
   const fetched = wm.getByTaskId('task-1');
   assert(fetched && fetched.id === created.id, 'getByTaskId should return created active worktree');
@@ -63,6 +70,8 @@ function testCreateListRemovePersist() {
   const reloaded = new WorktreeManager(BASE_BARE, WT_ROOT);
   const fromDisk = reloaded.get(created.id);
   assert(fromDisk, 'metadata should persist across manager instances');
+  assert.strictEqual(fromDisk.owner, 'eng', 'owner metadata should persist across reload');
+  assert.strictEqual(fromDisk.ticketId, 'TICKET-20260320-033', 'ticket metadata should persist across reload');
 
   wm.remove(created.id);
   assert(!fs.existsSync(created.path), 'worktree path should be removed after remove');
@@ -70,6 +79,27 @@ function testCreateListRemovePersist() {
   const removedRecord = wm.get(created.id);
   assert(removedRecord.status === 'removed', 'record should be marked removed');
   assert(removedRecord.removedAt, 'removed record should include removedAt');
+}
+
+function testRemoveSupportsForceForDirtyWorktree() {
+  const wm = new WorktreeManager(BASE_BARE, WT_ROOT);
+  const created = wm.create('task-dirty-force-remove', 'main');
+
+  fs.writeFileSync(path.join(created.path, 'DIRTY.txt'), 'uncommitted changes\n');
+
+  let removeFailed = false;
+  try {
+    wm.remove(created.id);
+  } catch (error) {
+    removeFailed = true;
+  }
+  assert(removeFailed, 'remove without force should fail on dirty worktree');
+
+  wm.remove(created.id, { force: true });
+  assert(!fs.existsSync(created.path), 'force remove should cleanup dirty worktree');
+
+  const removedRecord = wm.get(created.id);
+  assert(removedRecord.status === 'removed', 'force remove should still mark metadata removed');
 }
 
 
@@ -107,11 +137,36 @@ function testCleanupStaleUsesPorcelain() {
   assert(stale.removedAt, 'stale record should include removedAt timestamp');
 }
 
+function testPruneManagedRemovesOldTerminalMetadata() {
+  const wm = new WorktreeManager(BASE_BARE, WT_ROOT);
+
+  const removed = wm.create('task-prune-removed', 'main');
+  wm.remove(removed.id);
+
+  const stale = wm.create('task-prune-stale', 'main');
+  sh(`git -C ${BASE_BARE} worktree remove ${stale.path}`);
+  wm.cleanupStale();
+
+  // age both records so they become eligible for pruning
+  const removedRecord = wm.get(removed.id);
+  const staleRecord = wm.get(stale.id);
+  removedRecord.removedAt = '2000-01-01T00:00:00.000Z';
+  staleRecord.removedAt = '2000-01-01T00:00:00.000Z';
+  wm.persistWorktrees();
+
+  const prune = wm.pruneManaged({ olderThanMs: 1 });
+  assert(prune.prunedRecords >= 2, 'prune should remove old removed/stale metadata records');
+  assert.strictEqual(wm.get(removed.id), undefined, 'removed metadata should be pruned');
+  assert.strictEqual(wm.get(stale.id), undefined, 'stale metadata should be pruned');
+}
+
 function main() {
   setupRepo();
   try {
     testCreateListRemovePersist();
+    testRemoveSupportsForceForDirtyWorktree();
     testCleanupStaleUsesPorcelain();
+    testPruneManagedRemovesOldTerminalMetadata();
     testCreateFallsBackWhenBranchAlreadyCheckedOut();
     console.log('✓ worktree-manager tests passed');
   } finally {
