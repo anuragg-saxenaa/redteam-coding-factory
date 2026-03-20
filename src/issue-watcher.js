@@ -20,6 +20,7 @@ const GitHubIntake = require('./github-intake');
 const CodingFactory = require('./factory');
 const AgentRunner = require('./agent-runner');
 const path = require('path');
+const fs = require('fs');
 
 class IssueWatcher {
   /**
@@ -61,6 +62,8 @@ class IssueWatcher {
       ? config.maxPolls
       : Infinity;
     this.stopReason = null;
+    this.securityEscalationLogPath = config.securityEscalationLogPath
+      || path.join(this.dataDir, 'security-escalations.jsonl');
 
     // Callbacks
     this.onTaskComplete = config.onTaskComplete || null;
@@ -93,6 +96,7 @@ class IssueWatcher {
       enableAutoRemediation: this.enableAutoRemediation,
       maxRetryBudget: this.maxRetryBudget,
       maxRemediationAttempts: config.maxRemediationAttempts || 1,
+      onSecurityEscalation: (payload) => this._handleSecurityEscalation(payload),
     });
 
     // Keep agent wait timeout aligned with watcher-level timeout configuration.
@@ -379,6 +383,34 @@ class IssueWatcher {
       );
     } catch (_) {
       // best-effort
+    }
+  }
+
+  _handleSecurityEscalation(payload = {}) {
+    const escalation = {
+      ...payload,
+      ts: payload.ts || new Date().toISOString(),
+      watcherRepo: this.repo,
+    };
+
+    try {
+      fs.mkdirSync(path.dirname(this.securityEscalationLogPath), { recursive: true });
+      fs.appendFileSync(this.securityEscalationLogPath, `${JSON.stringify(escalation)}\n`);
+    } catch (err) {
+      console.warn(`[IssueWatcher] Failed to persist security escalation log: ${err.message}`);
+    }
+
+    const issueNumber = payload.issueNumber;
+    if (issueNumber) {
+      const lines = [
+        '🛡️ **Security escalation triggered (push blocked)**',
+        '',
+        `Reason: ${payload.reason || 'SECURITY_ESCALATION'}`,
+        payload.summary ? `Details: ${payload.summary}` : null,
+        '',
+        'Action required: INFOSEC/RED manual review before push.',
+      ].filter(Boolean);
+      this.intake.commentOnIssue(issueNumber, lines.join('\n'));
     }
   }
 

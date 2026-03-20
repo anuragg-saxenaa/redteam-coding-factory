@@ -41,7 +41,8 @@ class CodingFactory {
     this.criticGate = new CriticGate(this.taskManager);
     this.pushPRManager = new PushPRManager(this.worktreeManager, this.taskManager, {
       enablePush: this.enablePush,
-      gitHubCliPath: config.gitHubCliPath || 'gh'
+      gitHubCliPath: config.gitHubCliPath || 'gh',
+      onSecurityEscalation: config.onSecurityEscalation || null,
     });
     // Metrics should default to the factory's dataDir (runtime state), not the git repo.
     // This keeps tests and local runs from dirtying the repository.

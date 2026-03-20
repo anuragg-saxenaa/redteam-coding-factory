@@ -16,6 +16,7 @@ class PushPRManager {
     this.gitHubCliPath = config.gitHubCliPath || 'gh'; // Path to gh CLI
     this.execSync = config.execSync || execSync;
     this.enableSecurityDiffScan = config.enableSecurityDiffScan ?? true;
+    this.onSecurityEscalation = config.onSecurityEscalation || null;
   }
 
   _run(command, options = {}) {
@@ -27,6 +28,15 @@ class PushPRManager {
     const stderr = error && error.stderr ? error.stderr.toString() : '';
     const message = error && error.message ? error.message : 'unknown error';
     return [message, stderr, stdout].filter(Boolean).join('\n').trim();
+  }
+
+  _notifySecurityEscalation(payload) {
+    if (!this.onSecurityEscalation) return;
+    try {
+      this.onSecurityEscalation(payload);
+    } catch (_) {
+      // best-effort callback
+    }
   }
 
   _collectDiffFiles(wtPath, baseBranch = 'main') {
@@ -136,6 +146,22 @@ class PushPRManager {
         const details = securityScan.risky
           .map((entry) => `${entry.file} (${entry.reason})`)
           .join(', ');
+
+        this._notifySecurityEscalation({
+          taskId: task.id,
+          taskTitle: task.title,
+          issueNumber: task.metadata?.issueNumber,
+          issueUrl: task.metadata?.issueUrl,
+          repo: task.repo,
+          baseBranch,
+          branch: currentBranch,
+          files: securityScan.files,
+          risky: securityScan.risky,
+          summary: details,
+          reason: 'SECURITY_ESCALATION',
+          ts: new Date().toISOString(),
+        });
+
         throw new Error(`[PushPRManager] SECURITY_ESCALATION: sensitive diff detected. ${details}. Escalate to INFOSEC/RED for manual review before push.`);
       }
     }

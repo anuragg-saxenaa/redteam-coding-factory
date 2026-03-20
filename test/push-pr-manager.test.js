@@ -126,6 +126,7 @@ console.log('Test 3: createPushPR runs sync + security scan + push for successfu
 console.log('Test 4: createPushPR escalates on risky diff files');
 {
   const commands = [];
+  const escalations = [];
   const manager = createManager((cmd) => {
     commands.push(cmd);
     if (cmd.includes('rev-parse --abbrev-ref HEAD')) {
@@ -138,6 +139,8 @@ console.log('Test 4: createPushPR escalates on risky diff files');
       return Buffer.from('.github/workflows/pipeline.yml\n');
     }
     return Buffer.from('');
+  }, {
+    onSecurityEscalation: (payload) => escalations.push(payload),
   });
 
   let threw = false;
@@ -150,6 +153,8 @@ console.log('Test 4: createPushPR escalates on risky diff files');
 
   ok(threw, 'blocks push when risky workflow diff is detected');
   ok(!commands.some((c) => c.includes('push origin')), 'does not push when security scan escalates');
+  ok(escalations.length === 1, 'emits one security escalation callback');
+  ok(escalations[0]?.reason === 'SECURITY_ESCALATION', 'security escalation includes reason');
 }
 
 console.log('');
