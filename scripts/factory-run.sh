@@ -16,6 +16,8 @@ SKIP_TESTS="false"
 SELF_FIX_ON_FAILURE="true"
 CREATE_PR="false"
 PR_BASE_BRANCH=""
+WATCH_CI="true"
+CI_MAX_FIX_ATTEMPTS=3
 
 usage() {
   cat <<'EOF'
@@ -32,6 +34,8 @@ Options:
   --no-self-fix            Disable one retry/self-fix cycle on failure
   --create-pr              Push branch + create PR on success (requires gh auth)
   --pr-base <branch>       PR base branch (default: --base-branch)
+  --no-watch-ci            Disable CI reaction loop after PR creation
+  --ci-max-fix-attempts N  Max CI remediation attempts (default: 3)
   -h, --help               Show help
 
 Examples:
@@ -39,6 +43,7 @@ Examples:
   ./scripts/factory-run.sh --agent codex "Implement health endpoint"
   ./scripts/factory-run.sh --agent-cmd "codex exec --full-auto 'Refactor task queue'" "Refactor task queue"
   ./scripts/factory-run.sh --create-pr "Add metrics rollup"
+  ./scripts/factory-run.sh --create-pr --ci-max-fix-attempts 2 "Fix flaky CI in parser"
 EOF
 }
 
@@ -78,6 +83,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --pr-base)
       PR_BASE_BRANCH="$2"
+      shift 2
+      ;;
+    --no-watch-ci)
+      WATCH_CI="false"
+      shift
+      ;;
+    --ci-max-fix-attempts)
+      CI_MAX_FIX_ATTEMPTS="$2"
       shift 2
       ;;
     -h|--help)
@@ -152,11 +165,12 @@ Requirements:
 - Do not push.
 - Print a short summary of files changed and test results."
 
-  if [[ "$mode" == "self-fix" ]]; then
+  if [[ "$mode" != "initial" ]]; then
     prompt="${prompt}
 
-The previous run failed checks. This is a one-time self-fix attempt.
-Fix the failing checks and update the existing branch commit(s).
+The previous run failed validation and needs remediation.
+Mode: ${mode}
+Fix the failing checks (or CI failures described below) and update the existing branch commit(s).
 
 Failure context:
 ${extra_context}"
@@ -310,6 +324,90 @@ EOF
   echo "${pr_status}|${pr_url}"
 }
 
+ci_checks_bucket() {
+  local pr_ref="$1"
+  gh pr checks "$pr_ref" --json bucket --jq 'if length==0 then "pending" elif any(.[]; .bucket=="fail") then "fail" elif all(.[]; .bucket=="pass" or .bucket=="skipping") then "pass" else "pending" end' 2>>"$AGENT_LOG" || echo "pending"
+}
+
+summarize_failed_checks() {
+  local pr_ref="$1"
+  gh pr checks "$pr_ref" --json name,bucket,description,link --jq '.[] | select(.bucket=="fail") | "- " + .name + (if .description then " — " + .description else "" end) + (if .link then " (" + .link + ")" else "" end)' 2>>"$AGENT_LOG" | head -n 12
+}
+
+run_ci_reaction_loop() {
+  local pr_ref="$1"
+  local fix_attempt=0
+
+  if [[ "$WATCH_CI" != "true" ]]; then
+    echo "CI watch disabled (--no-watch-ci)" >> "$AGENT_LOG"
+    return 0
+  fi
+
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "CI watch skipped: gh CLI not found" >> "$AGENT_LOG"
+    return 0
+  fi
+
+  echo "⏳ Watching CI for ${pr_ref}"
+  echo "CI WATCH START: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$AGENT_LOG"
+
+  while true; do
+    local bucket
+    bucket="$(ci_checks_bucket "$pr_ref")"
+    echo "CI bucket: ${bucket}" >> "$AGENT_LOG"
+
+    if [[ "$bucket" == "pass" ]]; then
+      echo "✅ CI passed for ${pr_ref}"
+      echo "CI WATCH END: pass" >> "$AGENT_LOG"
+      return 0
+    fi
+
+    if [[ "$bucket" == "pending" || "$bucket" == "cancel" || "$bucket" == "skipping" ]]; then
+      sleep 15
+      continue
+    fi
+
+    if [[ "$bucket" == "fail" ]]; then
+      if (( fix_attempt >= CI_MAX_FIX_ATTEMPTS )); then
+        echo "CI remediation exhausted (${CI_MAX_FIX_ATTEMPTS} attempts)" >> "$AGENT_LOG"
+        ESCALATION_REQUIRED="true"
+        ESCALATION_REASON="ci_failed_after_max_reaction_attempts"
+        return 1
+      fi
+
+      fix_attempt=$((fix_attempt + 1))
+      local failure_summary
+      failure_summary="$(summarize_failed_checks "$pr_ref")"
+      echo "🔁 CI failed; remediation attempt ${fix_attempt}/${CI_MAX_FIX_ATTEMPTS}"
+      {
+        echo "CI REMEDIATION ATTEMPT: ${fix_attempt}"
+        echo "CI failure summary:"
+        echo "${failure_summary:-<no details>}"
+      } >> "$AGENT_LOG"
+
+      if ! run_agent "ci-fix-${fix_attempt}" "${failure_summary}"; then
+        echo "CI remediation agent run failed on attempt ${fix_attempt}" >> "$AGENT_LOG"
+      fi
+
+      local dirty
+      dirty="$(git -C "$WORKTREE_PATH" status --porcelain | wc -l | tr -d ' ')"
+      if [[ "$dirty" != "0" ]]; then
+        git -C "$WORKTREE_PATH" add -A >> "$AGENT_LOG" 2>&1 || true
+        git -C "$WORKTREE_PATH" commit -m "fix(ci): remediate failing checks (attempt ${fix_attempt})" >> "$AGENT_LOG" 2>&1 || true
+      fi
+
+      if ! git -C "$WORKTREE_PATH" push >> "$AGENT_LOG" 2>&1; then
+        echo "CI remediation push failed (attempt ${fix_attempt})" >> "$AGENT_LOG"
+      fi
+
+      sleep 10
+      continue
+    fi
+
+    sleep 15
+  done
+}
+
 AGENT_EXIT=0
 CHECK_EXIT=0
 SELF_FIX_ATTEMPTED=0
@@ -364,6 +462,12 @@ fi
 
 if [[ "$RESULT" == "success" ]]; then
   IFS='|' read -r PR_STATUS PR_URL <<< "$(create_pr_if_enabled)"
+
+  if [[ "$PR_STATUS" == "created" && -n "$PR_URL" ]]; then
+    if ! run_ci_reaction_loop "$PR_URL"; then
+      RESULT="failed"
+    fi
+  fi
 fi
 
 {

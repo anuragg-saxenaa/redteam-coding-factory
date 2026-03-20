@@ -1,26 +1,35 @@
-# Phase 4 — Result Validation & Feedback Loop
+# Phase 4 — CI Reaction Loop
 
 ## Overview
-Phase 4 validates task execution results and triggers autonomous fixes when validation fails.
+Phase 4 adds a post-PR CI reaction loop to `scripts/factory-run.sh`.
+After creating a PR, the runner monitors `gh pr checks` and attempts autonomous remediation on CI failures.
 
 ## Implementation
 
-### ResultValidator (src/result-validator.js)
-- Validates lint, test, and typecheck results
-- Short-circuits downstream checks on early failures
-- Enqueues fix subtasks on validation failure
-- Attaches validation artifacts to task records
+### CI Watch + Classification
+- Polls `gh pr checks --json bucket` and classifies overall state:
+  - `pass` when all checks pass/skipped
+  - `fail` when any check fails
+  - `pending` otherwise
+- Uses bounded polling with 15s intervals.
 
-### Validation Modes
-- `default`: lint + test
-- `strict`: lint + test + typecheck
+### Autonomous CI Remediation
+- On failure, captures failed check summaries (`name`, `description`, `link`)
+- Re-runs coding agent with remediation context (`mode=ci-fix-N`)
+- Auto-commits/pushes remediation changes
+- Re-enters CI watch loop after push
 
-### Feedback Loop
-- Failed validations trigger fix task creation
-- Fix tasks include validation errors + artifacts
-- Parent task tracked for correlation
+### Safety Bounds
+- Maximum remediation attempts configurable via `--ci-max-fix-attempts` (default `3`)
+- `--no-watch-ci` disables loop explicitly
+- On exhausted attempts, marks escalation with:
+  - `escalation_required=true`
+  - `escalation_reason=ci_failed_after_max_reaction_attempts`
 
-## Next Steps (Phase 5)
-- Implement PR creation with human review
-- Add code review integration (Critic gate)
-- Multi-repo orchestration improvements
+## CLI Additions
+- `--no-watch-ci`
+- `--ci-max-fix-attempts N`
+
+## Notes
+- CI reaction runs only when PR creation succeeds (`--create-pr` path).
+- Existing pre-PR local self-fix loop remains unchanged.
