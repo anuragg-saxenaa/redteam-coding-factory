@@ -33,10 +33,7 @@ on:
         default: "ci,self-heal"
         type: string
 
-permissions:
-  contents: read
-  actions: write
-  issues: write
+permissions: read-all
 
 jobs:
   auto-remediate-on-failure:
