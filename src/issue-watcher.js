@@ -65,6 +65,17 @@ class IssueWatcher {
     this.securityEscalationLogPath = config.securityEscalationLogPath
       || path.join(this.dataDir, 'security-escalations.jsonl');
 
+    const maintenance = config.worktreeMaintenance || {};
+    this.worktreeMaintenance = {
+      enabled: maintenance.enabled !== false,
+      runEveryPolls: Number.isFinite(maintenance.runEveryPolls) && maintenance.runEveryPolls > 0
+        ? maintenance.runEveryPolls
+        : 5,
+      pruneOlderHours: Number.isFinite(maintenance.pruneOlderHours) && maintenance.pruneOlderHours >= 0
+        ? maintenance.pruneOlderHours
+        : 168,
+    };
+
     // Callbacks
     this.onTaskComplete = config.onTaskComplete || null;
     this.onTaskFail = config.onTaskFail || null;
@@ -101,6 +112,8 @@ class IssueWatcher {
 
     // Keep agent wait timeout aligned with watcher-level timeout configuration.
     this.factory.agentIntegration.defaultTimeoutMs = this.agentTimeoutMs;
+
+    this._runWorktreeMaintenance('startup');
   }
 
   /**
@@ -170,6 +183,7 @@ class IssueWatcher {
 
     this._stats.polled++;
     console.log(`[IssueWatcher] Polling for issues... (cycle #${this._stats.polled})`);
+    this._maybeRunWorktreeMaintenance();
 
     let tasks;
     try {
@@ -442,6 +456,47 @@ class IssueWatcher {
     }
 
     return parts.length ? `Self-healing: ${parts.join(', ')}` : '';
+  }
+
+  _maybeRunWorktreeMaintenance() {
+    if (!this.worktreeMaintenance.enabled) return;
+    if (!Number.isFinite(this.worktreeMaintenance.runEveryPolls) || this.worktreeMaintenance.runEveryPolls <= 0) return;
+    if (this._stats.polled % this.worktreeMaintenance.runEveryPolls !== 0) return;
+    this._runWorktreeMaintenance(`poll-${this._stats.polled}`);
+  }
+
+  _runWorktreeMaintenance(trigger = 'manual') {
+    if (!this.worktreeMaintenance.enabled) return null;
+    if (!this.repoPath || !fs.existsSync(this.repoPath)) return null;
+
+    const hasGitDir = fs.existsSync(path.join(this.repoPath, '.git'));
+    const looksBareRepo = fs.existsSync(path.join(this.repoPath, 'HEAD'));
+    if (!hasGitDir && !looksBareRepo) return null;
+
+    try {
+      const stale = this.factory.worktreeManager.cleanupStale();
+      const prune = this.factory.worktreeManager.pruneManaged({
+        olderThanMs: this.worktreeMaintenance.pruneOlderHours * 60 * 60 * 1000,
+      });
+
+      const result = {
+        trigger,
+        staleMarked: stale.staleMarked || 0,
+        dirsPruned: stale.dirsPruned || 0,
+        prunedRecords: prune.prunedRecords || 0,
+      };
+
+      if (result.staleMarked > 0 || result.prunedRecords > 0 || result.dirsPruned > 0) {
+        console.log(
+          `[IssueWatcher] Worktree maintenance (${trigger}) — stale=${result.staleMarked}, dirs=${result.dirsPruned}, records=${result.prunedRecords}`
+        );
+      }
+
+      return result;
+    } catch (error) {
+      console.warn(`[IssueWatcher] Worktree maintenance (${trigger}) failed: ${error.message}`);
+      return null;
+    }
   }
 
   /**

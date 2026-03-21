@@ -267,6 +267,78 @@ console.log('Test 6: Stop sets state');
     }
   }
 
+  // --- Test 13: Worktree maintenance config defaults and overrides ---
+  console.log('Test 13: worktree maintenance config');
+  {
+    const defaultWatcher = new IssueWatcher({
+      repo: 'test/repo',
+      repoPath: '/tmp/test-repo',
+    });
+    if (defaultWatcher.worktreeMaintenance.enabled === true
+      && defaultWatcher.worktreeMaintenance.runEveryPolls === 5
+      && defaultWatcher.worktreeMaintenance.pruneOlderHours === 168) {
+      console.log('  ✓ default maintenance config applied');
+      passed++;
+    } else {
+      console.error('  ✗ default maintenance config mismatch');
+      failed++;
+    }
+
+    const customWatcher = new IssueWatcher({
+      repo: 'test/repo',
+      repoPath: '/tmp/test-repo',
+      worktreeMaintenance: {
+        enabled: false,
+        runEveryPolls: 2,
+        pruneOlderHours: 24,
+      },
+    });
+
+    if (customWatcher.worktreeMaintenance.enabled === false
+      && customWatcher.worktreeMaintenance.runEveryPolls === 2
+      && customWatcher.worktreeMaintenance.pruneOlderHours === 24) {
+      console.log('  ✓ custom maintenance config applied');
+      passed++;
+    } else {
+      console.error('  ✗ custom maintenance config mismatch');
+      failed++;
+    }
+  }
+
+  // --- Test 14: Periodic maintenance runs every N polls ---
+  console.log('Test 14: periodic maintenance cadence');
+  {
+    const watcher = new IssueWatcher({
+      repo: 'test/repo',
+      repoPath: '/tmp/test-repo',
+      worktreeMaintenance: {
+        enabled: true,
+        runEveryPolls: 2,
+        pruneOlderHours: 1,
+      },
+    });
+
+    let maintenanceRuns = 0;
+    watcher._runWorktreeMaintenance = () => {
+      maintenanceRuns += 1;
+      return { staleMarked: 0, dirsPruned: 0, prunedRecords: 0 };
+    };
+    watcher.intake.poll = () => [];
+
+    await watcher._poll(); // cycle 1
+    await watcher._poll(); // cycle 2 => maintenance
+    await watcher._poll(); // cycle 3
+    await watcher._poll(); // cycle 4 => maintenance
+
+    if (maintenanceRuns === 2) {
+      console.log('  ✓ maintenance runs on configured poll cadence');
+      passed++;
+    } else {
+      console.error(`  ✗ expected 2 maintenance runs, got ${maintenanceRuns}`);
+      failed++;
+    }
+  }
+
   // --- Summary ---
   console.log('');
   console.log(`=== Issue Watcher Tests: ${passed} passed, ${failed} failed ===`);
