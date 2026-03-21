@@ -1,0 +1,26 @@
+{
+  "tasks": [
+    {
+      "taskId": "swe-001",
+      "attempts": [
+        { "attempt": 1, "candidateId": "swe-001-a1", "solved": false, "ciPass": false, "patchScore": 0.31, "testsPassed": 12, "runtimeSec": 140 },
+        { "attempt": 2, "candidateId": "swe-001-a2", "solved": true,  "ciPass": true,  "patchScore": 0.88, "testsPassed": 21, "runtimeSec": 180 }
+      ]
+    },
+    {
+      "taskId": "swe-002",
+      "attempts": [
+        { "attempt": 1, "candidateId": "swe-002-a1", "solved": true, "ciPass": true, "patchScore": 0.81, "testsPassed": 20, "runtimeSec": 160 },
+        { "attempt": 2, "candidateId": "swe-002-a2", "solved": true, "ciPass": true, "patchScore": 0.79, "testsPassed": 19, "runtimeSec": 155 }
+      ]
+    },
+    {
+      "taskId": "swe-003",
+      "attempts": [
+        { "attempt": 1, "candidateId": "swe-003-a1", "solved": false, "ciPass": true, "patchScore": 0.44, "testsPassed": 14, "runtimeSec": 130 },
+        { "attempt": 2, "candidateId": "swe-003-a2", "solved": false, "ciPass": true, "patchScore": 0.53, "testsPassed": 16, "runtimeSec": 145 },
+        { "attempt": 3, "candidateId": "swe-003-a3", "solved": false, "ciPass": false, "patchScore": 0.52, "testsPassed": 15, "runtimeSec": 170 }
+      ]
+    }
+  ]
+}

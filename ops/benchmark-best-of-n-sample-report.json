@@ -1,0 +1,98 @@
+{
+  "mode": "best-of-3",
+  "n": 3,
+  "baseline": {
+    "attempted": 3,
+    "solved": 1,
+    "unsolved": 2,
+    "ciPass": 2,
+    "solveRate": 33.33,
+    "avgSelectedAttempt": 1
+  },
+  "bestOfN": {
+    "attempted": 3,
+    "solved": 2,
+    "unsolved": 1,
+    "ciPass": 3,
+    "solveRate": 66.67,
+    "avgSelectedAttempt": 1.67
+  },
+  "delta": {
+    "solveRatePoints": 33.34,
+    "solvedCount": 1,
+    "ciPassCount": 1,
+    "avgSelectedAttemptDelta": 0.67
+  },
+  "selections": {
+    "baseline": [
+      {
+        "taskId": "swe-001",
+        "attempt": 1,
+        "candidateId": "swe-001-a1",
+        "solved": false,
+        "ciPass": false,
+        "patchScore": 0.31,
+        "testsPassed": 12,
+        "runtimeSec": 140,
+        "error": null
+      },
+      {
+        "taskId": "swe-002",
+        "attempt": 1,
+        "candidateId": "swe-002-a1",
+        "solved": true,
+        "ciPass": true,
+        "patchScore": 0.81,
+        "testsPassed": 20,
+        "runtimeSec": 160,
+        "error": null
+      },
+      {
+        "taskId": "swe-003",
+        "attempt": 1,
+        "candidateId": "swe-003-a1",
+        "solved": false,
+        "ciPass": true,
+        "patchScore": 0.44,
+        "testsPassed": 14,
+        "runtimeSec": 130,
+        "error": null
+      }
+    ],
+    "bestOfN": [
+      {
+        "taskId": "swe-001",
+        "attempt": 2,
+        "candidateId": "swe-001-a2",
+        "solved": true,
+        "ciPass": true,
+        "patchScore": 0.88,
+        "testsPassed": 21,
+        "runtimeSec": 180,
+        "error": null
+      },
+      {
+        "taskId": "swe-002",
+        "attempt": 1,
+        "candidateId": "swe-002-a1",
+        "solved": true,
+        "ciPass": true,
+        "patchScore": 0.81,
+        "testsPassed": 20,
+        "runtimeSec": 160,
+        "error": null
+      },
+      {
+        "taskId": "swe-003",
+        "attempt": 2,
+        "candidateId": "swe-003-a2",
+        "solved": false,
+        "ciPass": true,
+        "patchScore": 0.53,
+        "testsPassed": 16,
+        "runtimeSec": 145,
+        "error": null
+      }
+    ]
+  }
+}

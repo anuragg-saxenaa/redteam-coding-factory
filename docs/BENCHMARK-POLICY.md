@@ -41,5 +41,26 @@ Use `ops/templates/swe-bench-verified-report.md` as the standard report format.
 - **Owner**: ENG
 - **Reviewers**: RED (delivery impact), INFOSEC (policy/security-sensitive changes)
 
+## Best-of-N Evaluation Mode
+For candidate-selection experiments, run benchmark attempts with `N > 1` and deterministically select one patch per task.
+
+Selection order (deterministic):
+1. `solved=true`
+2. `ciPass=true`
+3. highest `patchScore`
+4. highest `testsPassed`
+5. lowest `runtimeSec`
+6. lowest `attempt`
+7. lexicographic `candidateId`
+
+Required delta reporting versus single-shot (`N=1` baseline):
+- Solve rate delta (points)
+- Solved count delta
+- CI-pass count delta
+- Avg selected-attempt delta
+
+Use:
+- `node scripts/evaluate-best-of-n.js --input <attempts.json> --n <N> --output <report.json>`
+
 ## Notes
 Operational metrics from `dataDir/metrics.json` are useful for runtime health, but they are **not** the canonical agent capability metric.

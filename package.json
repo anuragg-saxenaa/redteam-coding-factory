@@ -7,8 +7,9 @@
     "redteam-factory": "src/cli.js"
   },
   "scripts": {
-    "test": "node test/result-validator.test.js && node test/integration.test.js && node test/phase6.test.js && node test/redteam-factory.test.js && node test/self-healing-ci.test.js && node test/guarded-auto-remediation.test.js && node test/worktree-manager.test.js && node test/factory-status-board.test.js && node test/push-pr-manager.test.js && node test/llm-test-governance.test.js && node test/copilot-review-metrics.test.js && node test/cli-task-normalization.test.js && node test/cli.test.js && node test/agent-runner.test.js && node test/a2a-client.test.js && node test/a2a-timeout-rate.test.js && node test/agent-integration.test.js && node test/github-intake.test.js && node test/issue-watcher.test.js",
+    "test": "node test/result-validator.test.js && node test/integration.test.js && node test/phase6.test.js && node test/redteam-factory.test.js && node test/self-healing-ci.test.js && node test/guarded-auto-remediation.test.js && node test/worktree-manager.test.js && node test/factory-status-board.test.js && node test/push-pr-manager.test.js && node test/llm-test-governance.test.js && node test/copilot-review-metrics.test.js && node test/cli-task-normalization.test.js && node test/cli.test.js && node test/agent-runner.test.js && node test/a2a-client.test.js && node test/a2a-timeout-rate.test.js && node test/agent-integration.test.js && node test/github-intake.test.js && node test/issue-watcher.test.js && node test/best-of-n-benchmark.test.js",
     "test:a2a": "node test/a2a-client.test.js && node test/a2a-timeout-rate.test.js",
+    "benchmark:best-of-n": "node scripts/evaluate-best-of-n.js",
     "start-dashboard": "node -e \"require('./src/dashboard/dashboard-service').start()\"",
     "dashboard": "npm run start-dashboard",
     "status-board": "node scripts/factory-status-board.js"
