@@ -24,6 +24,7 @@ RUN_TYPECHECK="auto"        # auto|true|false
 RUN_SECURITY_SCAN="false"   # false by default to avoid blocking on advisory DB drift
 NPM_AUDIT_LEVEL="high"
 METRICS_FILE_RELATIVE="ops/metrics.json"
+METRICS_MAX_ENTRIES=500
 CLEANUP_WORKTREE="on-success"   # never|on-success|always
 SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
 SLACK_POST_STATUS="skipped"
@@ -50,6 +51,7 @@ Options:
   --npm-audit-level <lvl>  npm audit level: low|moderate|high|critical (default: high)
   --cleanup-worktree <m>   never|on-success|always (default: on-success)
   --keep-worktree          Alias for --cleanup-worktree never
+  --metrics-max-entries N  Max retained entries in ops/metrics.json (default: 500)
   --slack-webhook-url <u>  Override Slack webhook URL for #redos-eng summary post
   -h, --help               Show help
 
@@ -128,6 +130,10 @@ while [[ $# -gt 0 ]]; do
       CLEANUP_WORKTREE="never"
       shift
       ;;
+    --metrics-max-entries)
+      METRICS_MAX_ENTRIES="$2"
+      shift 2
+      ;;
     --slack-webhook-url)
       SLACK_WEBHOOK_URL="$2"
       shift 2
@@ -180,6 +186,11 @@ fi
 
 if [[ "$NPM_AUDIT_LEVEL" != "low" && "$NPM_AUDIT_LEVEL" != "moderate" && "$NPM_AUDIT_LEVEL" != "high" && "$NPM_AUDIT_LEVEL" != "critical" ]]; then
   echo "Error: invalid --npm-audit-level '$NPM_AUDIT_LEVEL' (expected low|moderate|high|critical)" >&2
+  exit 1
+fi
+
+if ! [[ "$METRICS_MAX_ENTRIES" =~ ^[0-9]+$ ]] || [[ "$METRICS_MAX_ENTRIES" -lt 1 ]]; then
+  echo "Error: invalid --metrics-max-entries '$METRICS_MAX_ENTRIES' (expected integer >= 1)" >&2
   exit 1
 fi
 
@@ -562,10 +573,12 @@ append_metrics() {
     METRICS_PR_URL="$PR_URL" \
     METRICS_CI_RESULT="$ci_result" \
     METRICS_CI_LAST_ERROR="$ci_last_error" \
+    METRICS_MAX_ENTRIES="$METRICS_MAX_ENTRIES" \
     node <<'NODE'
 const fs = require('fs');
 
 const file = process.env.METRICS_FILE;
+const maxEntries = Number(process.env.METRICS_MAX_ENTRIES || '500');
 const entry = {
   timestamp: process.env.METRICS_TS,
   task: process.env.METRICS_TASK,
@@ -591,6 +604,9 @@ if (fs.existsSync(file)) {
 }
 
 data.push(entry);
+if (Number.isFinite(maxEntries) && maxEntries > 0 && data.length > maxEntries) {
+  data = data.slice(-maxEntries);
+}
 fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
 NODE
   else
