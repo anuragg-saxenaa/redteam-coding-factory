@@ -1,0 +1,28 @@
+{
+  "dataDir": "./data/9router",
+  "enablePush": true,
+  "createPR": true,
+  "enableAutoRemediation": true,
+  "maxRetryBudget": 6,
+  "maxRemediationAttempts": 2,
+  "enableDashboard": false,
+  "repos": [
+    {
+      "name": "9router",
+      "path": "/Users/redinside/.openclaw/workspace-eng/repos/9router",
+      "branch": "main"
+    }
+  ],
+  "github": {
+    "repo": "decolua/9router",
+    "repoPath": "/Users/redinside/.openclaw/workspace-eng/repos/9router",
+    "branch": "main",
+    "label": "factory-ready",
+    "pollIntervalSec": 60,
+    "maxConcurrent": 1,
+    "agent": "claude",
+    "agentTimeoutSec": 600,
+    "autoClose": false,
+    "maxTasksPerRun": 3
+  }
+}
