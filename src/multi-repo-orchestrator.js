@@ -22,6 +22,11 @@ class MultiRepoOrchestrator {
     this.maxRemediationAttempts = config.maxRemediationAttempts ?? 1;
     this.baseDelayMs = config.baseDelayMs ?? 200;
     this.maxDelayMs = config.maxDelayMs ?? 4000;
+    this.enablePush = config.enablePush ?? false;
+    this.createPR = config.createPR ?? false;
+    this.useAgent = !!(config.agent);
+    this.agent = config.agent || null;
+    this.validationMode = config.validationMode || 'default';
     this.isRunning = false;
     this.repoBranches = new Map();
 
@@ -37,9 +42,10 @@ class MultiRepoOrchestrator {
         baseRepo: repo.path,
         dataDir: path.join(this.dataDir, repo.name),
         worktreeRoot: path.join(this.dataDir, repo.name, 'worktrees'),
-        validationMode: 'default',
-        enablePush: false,
-        createPR: false,
+        validationMode: this.validationMode,
+        enablePush: this.enablePush,
+        createPR: this.createPR,
+        agent: this.agent,
         maxRetries: this.maxRetries,
         maxRetryBudget: this.maxRetryBudget,
         enableAutoRemediation: this.enableAutoRemediation,
@@ -168,7 +174,7 @@ class MultiRepoOrchestrator {
 
     console.log(`[MultiRepoOrchestrator] Processing task ${taskId} in repo ${repoName}`);
     try {
-      const result = await factory.processNext(false, false);
+      const result = await factory.processNext(this.useAgent, this.enablePush && this.createPR);
       const normalized = result || {
         taskId,
         status: 'failed',
@@ -225,7 +231,7 @@ class MultiRepoOrchestrator {
       };
 
       const record = factory.submitTask(repoTask);
-      const result = await factory.processNext(false, false);
+      const result = await factory.processNext(this.useAgent, this.enablePush && this.createPR);
       results[repoSpec.name] = result || { status: 'pending' };
     }
 

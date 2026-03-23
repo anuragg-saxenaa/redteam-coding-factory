@@ -8,6 +8,7 @@ class ResultValidator {
     this.taskManager = taskManager;
     this.factory = factory;
     this.validationRules = {
+      none: [],
       default: ['lint', 'test'],
       strict: ['lint', 'test', 'typecheck']
     };

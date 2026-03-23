@@ -4,14 +4,14 @@
  */
 
 const A2AClient = require('./a2a-client');
+const AgentRunner = require('./agent-runner');
 
 class AgentIntegration {
   constructor(factory, agentId = 'eng', options = {}) {
     this.factory = factory;
     this.agentId = agentId;
-    this.activeAgents = new Map(); // taskId -> agentSessionKey
+    this.activeAgents = new Map(); // taskId -> { agentSessionKey, runner, resultPromise }
     this.defaultTimeoutMs = options.defaultTimeoutMs || 5 * 60 * 1000;
-    this.simulatedWorkMs = options.simulatedWorkMs || 5000;
 
     this._transport = options.transport || this._defaultTransport.bind(this);
     this.a2aClient = new A2AClient({
@@ -27,6 +27,16 @@ class AgentIntegration {
   }
 
   /**
+   * Configure which agent CLI to use (called by factory before spawnAgent).
+   * @param {string} agentName - 'codex' | 'claude' | 'custom'
+   * @param {Object} [customOptions] - passed to AgentRunner for 'custom' preset
+   */
+  setAgent(agentName, customOptions = {}) {
+    this._agentName = agentName;
+    this._agentOptions = customOptions;
+  }
+
+  /**
    * Spawn a sub-agent to work on a task
    * @param {Object} task - task record
    * @param {Object} worktree - worktree record
@@ -34,11 +44,11 @@ class AgentIntegration {
    */
   async spawnAgent(task, worktree) {
     const prompt = this.buildPrompt(task, worktree);
+    const agentName = this._agentName || this.agentId || 'codex';
 
-    console.log(`[AgentIntegration] Spawning agent for task ${task.id}...`);
+    console.log(`[AgentIntegration] Spawning agent "${agentName}" for task ${task.id} in ${worktree.path}`);
 
-    // Attempt resilient A2A dispatch first. On transport absence/failure,
-    // continue with local placeholder session key so the POC stays runnable.
+    // Attempt A2A dispatch first. On transport absence/failure, fall back to AgentRunner.
     let dispatch = null;
     try {
       dispatch = await this.a2aClient.send({
@@ -50,13 +60,37 @@ class AgentIntegration {
       console.warn(`[AgentIntegration] A2A dispatch failed: ${error.message}`);
     }
 
-    const fallbackSessionKey = `agent:${this.agentId}:task-${task.id}`;
+    const fallbackSessionKey = `agent:${agentName}:task-${task.id}`;
     const agentSessionKey =
       dispatch?.response?.sessionKey ||
       dispatch?.response?.agentSessionKey ||
       fallbackSessionKey;
 
-    this.activeAgents.set(task.id, agentSessionKey);
+    // Spin up AgentRunner and start it asynchronously
+    let runner = null;
+    let runPromise = null;
+    try {
+      runner = new AgentRunner({
+        agent: agentName,
+        timeoutMs: this.defaultTimeoutMs,
+        ...this._agentOptions,
+      });
+
+      if (!runner.isAvailable()) {
+        console.warn(`[AgentIntegration] Agent "${agentName}" binary not found on PATH — A2A-only mode`);
+      } else {
+        runPromise = runner.run(task, worktree.path);
+      }
+    } catch (err) {
+      console.error(`[AgentIntegration] Failed to create AgentRunner: ${err.message}`);
+    }
+
+    this.activeAgents.set(task.id, {
+      agentSessionKey,
+      runner,
+      resultPromise: runPromise,
+      spawnedAt: new Date().toISOString(),
+    });
 
     return {
       agentSessionKey,
@@ -116,41 +150,63 @@ Begin now.
   /**
    * Wait for agent to complete
    * @param {string} agentSessionKey - session key from spawn
-   * @param {number} timeoutMs - max wait time
+   * @param {number} timeoutMs - max wait time (overrides defaultTimeoutMs)
    * @returns {Promise<Object>} - agent result
    */
   async waitForAgent(agentSessionKey, timeoutMs = this.defaultTimeoutMs) {
+    // Find the active agent by session key
+    let agentEntry = null;
+    for (const entry of this.activeAgents.values()) {
+      if (entry.agentSessionKey === agentSessionKey) {
+        agentEntry = entry;
+        break;
+      }
+    }
+
+    if (!agentEntry || !agentEntry.resultPromise) {
+      // A2A-only mode: nothing to wait on, return placeholder
+      console.warn(`[AgentIntegration] No AgentRunner result for ${agentSessionKey} — A2A-only mode`);
+      return {
+        agentSessionKey,
+        status: 'completed',
+        output: 'A2A dispatch completed (no local agent runner)',
+        completedAt: new Date().toISOString(),
+      };
+    }
+
     console.log(`[AgentIntegration] Waiting for agent ${agentSessionKey}...`);
 
-    // In a real implementation, this would poll sessions_history
-    // For now, we'll simulate completion while still honoring the timeout.
-    return new Promise((resolve) => {
-      let settled = false;
+    try {
+      const result = await Promise.race([
+        agentEntry.resultPromise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Agent timeout (${timeoutMs}ms)`)), timeoutMs)
+        ),
+      ]);
 
-      const completeTimer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutTimer);
-        resolve({
-          agentSessionKey,
-          status: 'completed',
-          output: 'Agent completed task successfully',
-          completedAt: new Date().toISOString()
-        });
-      }, this.simulatedWorkMs);
+      const status = result.success ? 'completed' : 'failed';
+      console.log(`[AgentIntegration] Agent ${agentSessionKey} finished: ${status} (exit=${result.exitCode})`);
 
-      const timeoutTimer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(completeTimer);
-        resolve({
-          agentSessionKey,
-          status: 'timeout',
-          error: `Agent wait exceeded timeout (${timeoutMs}ms)`,
-          timedOutAt: new Date().toISOString()
-        });
-      }, timeoutMs);
-    });
+      return {
+        agentSessionKey,
+        status,
+        exitCode: result.exitCode,
+        killed: result.killed,
+        output: result.stdout,
+        errors: result.stderr,
+        durationMs: result.durationMs,
+        completedAt: new Date().toISOString(),
+      };
+    } catch (err) {
+      console.error(`[AgentIntegration] Agent ${agentSessionKey} error: ${err.message}`);
+      return {
+        agentSessionKey,
+        status: 'error',
+        error: err.message,
+        timedOutAt: err.message.includes('timeout') ? new Date().toISOString() : undefined,
+        completedAt: new Date().toISOString(),
+      };
+    }
   }
 
   /**

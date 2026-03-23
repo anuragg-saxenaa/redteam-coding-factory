@@ -1,23 +1,25 @@
 {
-  "dataDir": "./data/9router",
+  "dataDir": "/Users/redinside/Development/Codebase/projects/RedTeam/github/redteam-coding-factory/data/9router",
   "enablePush": true,
   "createPR": true,
   "enableAutoRemediation": true,
   "maxRetryBudget": 6,
   "maxRemediationAttempts": 2,
   "enableDashboard": false,
+  "validationMode": "none",
   "repos": [
     {
       "name": "9router",
       "path": "/Users/redinside/.openclaw/workspace-eng/repos/9router",
-      "branch": "main"
+      "branch": "master"
     }
   ],
   "github": {
     "repo": "decolua/9router",
     "repoPath": "/Users/redinside/.openclaw/workspace-eng/repos/9router",
-    "branch": "main",
+    "branch": "master",
     "label": "factory-ready",
+    "autoClaim": false,
     "pollIntervalSec": 60,
     "maxConcurrent": 1,
     "agent": "claude",

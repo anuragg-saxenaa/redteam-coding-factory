@@ -52,6 +52,10 @@ class RedTeamFactory {
       maxRemediationAttempts: this.config.maxRemediationAttempts,
       baseDelayMs: this.config.baseDelayMs,
       maxDelayMs: this.config.maxDelayMs,
+      enablePush: this.config.enablePush,
+      createPR: this.config.createPR,
+      agent: this.config.agent,
+      validationMode: this.config.validationMode,
     };
 
     this.orchestrator = new MultiRepoOrchestrator(orchestratorConfig);

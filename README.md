@@ -1,6 +1,16 @@
 # RedTeam Coding Factory
 
-Autonomous coding factory with multi-repo orchestration. Phases 1-6 complete and production-ready.
+Autonomous coding factory with multi-repo orchestration. Phases 1-6 complete and production-deployed.
+
+## Live Production Status
+
+The factory runs 24/7 inside the OpenClaw RedOS infrastructure:
+
+- **9router IssueWatcher** — polls `decolua/9router` every 15 min, picks fixable issues, implements fixes, opens PRs automatically
+- **Self-Healing Monitor** — runs every 4 h, checks PR CI status, auto-fixes failures
+- **OSS Contributor** — runs daily, finds OSS repos with 5000+ stars, contributes fixes
+
+Active PRs created autonomously: [PR #387](https://github.com/decolua/9router/pull/387), [PR #394](https://github.com/decolua/9router/pull/394), [PR #396](https://github.com/decolua/9router/pull/396)
 
 ## Quick Start
 
@@ -148,6 +158,18 @@ All 3 test suites pass:
 - `test/integration.test.js` — Phases 1-5
 - `test/phase6.test.js` — Multi-repo orchestration
 - `test/redteam-factory.test.js` — Production integration
+
+## Agent Integration (Phase 3)
+
+`AgentIntegration` now spawns real agents via `AgentRunner` with full async result tracking:
+
+- `setAgent(name)` — configure which CLI to use (`claude`, `codex`, or custom)
+- `spawnAgent(task, worktree)` — starts the agent process in the worktree, returns session key
+- `waitForAgent(sessionKey)` — awaits real completion, respects timeout
+- A2A dispatch first; falls back to `AgentRunner` if transport unavailable
+- Multi-repo orchestrator propagates `useAgent` and `enablePush` through cross-repo tasks
+
+**Key fix (2026-03-23):** `waitForAgent` previously simulated a 5 s sleep and always returned "completed". It now awaits the actual agent process.
 
 ## A2A Reliability and Coordination
 

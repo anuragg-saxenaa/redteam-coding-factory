@@ -227,6 +227,13 @@ async function main() {
   }
 
   // --- run command ---
+  // Merge CLI flags into config so RedTeamFactory/MultiRepoOrchestrator see them
+  if (args.push) config.enablePush = true;
+  if (args.pr) config.createPR = true;
+  if (args.agent) config.agent = args.agent;
+  if (args.remediate) config.enableAutoRemediation = true;
+  if (args.retryBudget) config.maxRetryBudget = args.retryBudget;
+
   const factory = new RedTeamFactory(config);
   factory.initialize(config.repos || []);
 

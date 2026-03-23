@@ -37,6 +37,9 @@ class CodingFactory {
       baseDelayMs: config.baseDelayMs ?? 200,
     });
     this.agentIntegration = new AgentIntegration(this);
+    if (config.agent) {
+      this.agentIntegration.setAgent(config.agent);
+    }
     this.validator = new ResultValidator(this.taskManager, this);
     this.criticGate = new CriticGate(this.taskManager);
     this.pushPRManager = new PushPRManager(this.worktreeManager, this.taskManager, {

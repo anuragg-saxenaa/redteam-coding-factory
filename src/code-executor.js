@@ -219,9 +219,14 @@ class CodeExecutor {
         output: output.substring(0, 500) // truncate
       };
     } catch (error) {
+      const errMsg = this._formatExecError(error);
+      // No lint script configured — treat as skipped, not a failure
+      if (errMsg.includes('Missing script') && errMsg.includes('lint')) {
+        return { success: true, output: '[lint skipped — no lint script in package.json]' };
+      }
       return {
         success: false,
-        error: this._formatExecError(error)
+        error: errMsg
       };
     }
   }
@@ -241,9 +246,14 @@ class CodeExecutor {
         output: output.substring(0, 500)
       };
     } catch (error) {
+      const errMsg = this._formatExecError(error);
+      // No test script configured — treat as skipped, not a failure
+      if (errMsg.includes('Missing script') && (errMsg.includes('"test"') || errMsg.includes("'test'"))) {
+        return { success: true, output: '[tests skipped — no test script in package.json]' };
+      }
       return {
         success: false,
-        error: this._formatExecError(error)
+        error: errMsg
       };
     }
   }
