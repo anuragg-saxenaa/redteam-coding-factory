@@ -1,41 +1,45 @@
 /**
  * Task Manager — intake, queue, and dispatch coding tasks
- * Phase 1: Simple in-memory queue with file persistence
+ *
+ * Production-hardened:
+ *   #11 Atomic writes: all queue flushes go to a .tmp file then renamed,
+ *       so a mid-write crash can never leave the queue corrupted.
  */
 
-const fs = require('fs');
+'use strict';
+
+const fs   = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 class TaskManager {
   constructor(queuePath = './data/task-queue.jsonl') {
     this.queuePath = queuePath;
-    this.tasks = new Map(); // id → task
-    this.queue = []; // [id, id, ...] in order
+    this.tasks     = new Map();
+    this.queue     = [];
     this.loadQueue();
   }
 
-  /**
-   * Intake a new task
-   * @param {Object} task - { title, description, repo, branch?, assignee? }
-   * @returns {Object} - { id, status, createdAt, ... }
-   */
   intake(task) {
-    const id = uuidv4();
+    const id  = uuidv4();
     const now = new Date().toISOString();
     const record = {
       id,
-      title: task.title,
+      title      : task.title,
       description: task.description,
-      repo: task.repo,
-      branch: task.branch || null,
-      assignee: task.assignee || 'unassigned',
-      status: 'queued', // queued → in_progress → completed → failed
-      createdAt: now,
-      startedAt: null,
+      repo       : task.repo,
+      branch     : task.branch    || null,
+      assignee   : task.assignee  || 'unassigned',
+      owner      : task.owner     || null,
+      ticketId   : task.ticketId  || null,
+      labels     : task.labels    || [],
+      metadata   : task.metadata  || {},
+      status     : 'queued',
+      createdAt  : now,
+      startedAt  : null,
       completedAt: null,
-      error: null,
-      worktreeId: null,
+      error      : null,
+      worktreeId : null,
     };
     this.tasks.set(id, record);
     this.queue.push(id);
@@ -43,96 +47,87 @@ class TaskManager {
     return record;
   }
 
-  /**
-   * Get next task from queue
-   * @returns {Object|null}
-   */
   next() {
     while (this.queue.length > 0) {
-      const id = this.queue[0];
+      const id   = this.queue[0];
       const task = this.tasks.get(id);
-      if (task && task.status === 'queued') {
-        return task;
-      }
-      this.queue.shift(); // skip non-queued
+      if (task && task.status === 'queued') return task;
+      this.queue.shift();
     }
     return null;
   }
 
-  /**
-   * Mark task as in_progress
-   */
   start(id, worktreeId) {
-    const task = this.tasks.get(id);
-    if (!task) throw new Error(`Task ${id} not found`);
-    task.status = 'in_progress';
+    const task = this._get(id);
+    task.status    = 'in_progress';
     task.startedAt = new Date().toISOString();
-    task.worktreeId = worktreeId;
+    task.worktreeId= worktreeId;
     this.persistQueue();
   }
 
-  /**
-   * Mark task as completed
-   */
   complete(id, result) {
-    const task = this.tasks.get(id);
-    if (!task) throw new Error(`Task ${id} not found`);
-    task.status = 'completed';
-    task.completedAt = new Date().toISOString();
-    task.result = result;
+    const task = this._get(id);
+    task.status     = 'completed';
+    task.completedAt= new Date().toISOString();
+    task.result     = result;
     this.persistQueue();
   }
 
-  /**
-   * Mark task as failed
-   */
   fail(id, error) {
-    const task = this.tasks.get(id);
-    if (!task) throw new Error(`Task ${id} not found`);
-    task.status = 'failed';
-    task.completedAt = new Date().toISOString();
-    task.error = error;
+    const task = this._get(id);
+    task.status     = 'failed';
+    task.completedAt= new Date().toISOString();
+    task.error      = error;
     this.persistQueue();
   }
 
   /**
-   * Persist queue to disk (JSONL format)
+   * FIX #11: Atomic write — write to .tmp then rename so a crash mid-write
+   * never corrupts the live queue file.  fs.renameSync is atomic on POSIX
+   * (Linux/macOS) when both paths are on the same filesystem.
    */
   persistQueue() {
     const dir = path.dirname(this.queuePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const lines = Array.from(this.tasks.values()).map(t => JSON.stringify(t));
-    fs.writeFileSync(this.queuePath, lines.join('\n') + '\n');
+
+    const content  = Array.from(this.tasks.values()).map(t => JSON.stringify(t)).join('\n') + '\n';
+    const tmpPath  = this.queuePath + '.tmp';
+
+    fs.writeFileSync(tmpPath, content, { encoding: 'utf8', flag: 'w' });
+    fs.renameSync(tmpPath, this.queuePath); // ← atomic swap
   }
 
-  /**
-   * Load queue from disk
-   */
   loadQueue() {
-    if (!fs.existsSync(this.queuePath)) return;
+    // Also handle a leftover .tmp from a previous crash
+    if (!fs.existsSync(this.queuePath)) {
+      const tmpPath = this.queuePath + '.tmp';
+      if (fs.existsSync(tmpPath)) {
+        console.warn('[TaskManager] Recovering from .tmp queue file (previous crash)');
+        try { fs.renameSync(tmpPath, this.queuePath); } catch (_) {}
+      } else {
+        return;
+      }
+    }
+
     const content = fs.readFileSync(this.queuePath, 'utf8');
-    const lines = content.trim().split('\n').filter(l => l);
-    lines.forEach(line => {
+    for (const line of content.trim().split('\n').filter(Boolean)) {
       try {
         const task = JSON.parse(line);
         this.tasks.set(task.id, task);
         if (task.status === 'queued') this.queue.push(task.id);
       } catch (e) {
-        console.error(`Failed to parse task line: ${line}`, e);
+        console.error(`[TaskManager] Skipping corrupt queue line: ${line.slice(0, 80)}`, e.message);
       }
-    });
+    }
   }
 
-  /**
-   * Get task by id
-   */
-  get(id) {
-    return this.tasks.get(id);
+  get(id)  { return this.tasks.get(id); }
+  _get(id) {
+    const t = this.tasks.get(id);
+    if (!t) throw new Error(`Task ${id} not found`);
+    return t;
   }
 
-  /**
-   * List all tasks
-   */
   list(filter = {}) {
     return Array.from(this.tasks.values()).filter(t => {
       if (filter.status && t.status !== filter.status) return false;
