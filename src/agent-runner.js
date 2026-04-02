@@ -1,206 +1,149 @@
 /**
  * Agent Runner — Phase 2: Real Coding Agent Execution
  *
- * Actually shells out to a coding agent CLI (codex or claude)
- * inside an isolated worktree directory.
- *
- * Supports:
- *  - codex CLI  (OpenAI Codex)
- *  - claude CLI  (Anthropic Claude Code)
- *  - custom command
- *
- * Each run:
- *  1. Builds a task prompt from the task record
- *  2. Spawns the agent CLI as a child process in the worktree
- *  3. Captures stdout/stderr with a timeout
- *  4. Detects success/failure from exit code + output
- *  5. Returns structured result
+ * Production-hardened:
+ *   #2  Kills entire process GROUP on timeout (prevents orphan sub-processes)
+ *   #14 Per-task log streaming: agent stdout is written to agent-logs/<taskId>.log
  */
 
-const { execSync, spawn } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+'use strict';
 
-const AGENT_PRESETS = {
-  codex: {
-    bin: 'codex',
-    buildArgs: (prompt, worktreePath) => [
-      '--quiet',
-      '--full-auto',
-      '-m', 'o4-mini',
-      prompt,
-    ],
-    cwd: (worktreePath) => worktreePath,
-    env: {},
-  },
-  claude: {
-    bin: 'claude',
-    buildArgs: (prompt, worktreePath) => [
-      '-p', prompt,
-      '--allowedTools', 'Bash,Read,Write,Edit',
-      '--output-format', 'text',
-    ],
-    cwd: (worktreePath) => worktreePath,
-    env: {},
-  },
-};
+const { spawn }    = require('child_process');
+const path         = require('path');
+const fs           = require('fs');
+
+const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 min
 
 class AgentRunner {
   /**
-   * @param {Object} options
-   * @param {string} options.agent       - Agent preset: 'codex' | 'claude' | 'custom'
-   * @param {string} options.customBin   - Custom binary path (when agent='custom')
-   * @param {Function} options.customArgs - (prompt, worktreePath) => string[] (when agent='custom')
-   * @param {number} options.timeoutMs   - Max execution time (default: 5 min)
-   * @param {number} options.maxOutputBytes - Truncate captured output (default: 100KB)
-   * @param {Function} options.onOutput  - Optional live output callback (chunk) => void
+   * @param {Object} config
+   * @param {string}   config.agentBin        - path/name of the agent binary (e.g. 'claude')
+   * @param {string[]} [config.agentArgs]     - extra CLI flags to pass
+   * @param {number}   [config.timeoutMs]     - per-task timeout (default 10 min)
+   * @param {string}   [config.logDir]        - directory for per-task log files
+   * @param {Function} [config.onOutput]      - (chunk:string) => void  live output callback
+   * @param {Function} [config.onError]       - (chunk:string) => void  stderr callback
    */
-  constructor(options = {}) {
-    this.agentName = options.agent || 'codex';
-    this.timeoutMs = options.timeoutMs || 5 * 60 * 1000;
-    this.maxOutputBytes = options.maxOutputBytes || 100 * 1024;
-    this.onOutput = options.onOutput || null;
+  constructor(config = {}) {
+    this.agentBin   = config.agentBin  || process.env.AGENT_BIN  || 'claude';
+    this.agentArgs  = config.agentArgs || [];
+    this.timeoutMs  = config.timeoutMs || DEFAULT_TIMEOUT_MS;
+    this.onOutput   = config.onOutput  || null;
+    this.onError    = config.onError   || null;
 
-    if (this.agentName === 'custom') {
-      if (!options.customBin) throw new Error('agent-runner: customBin required when agent=custom');
-      this._preset = {
-        bin: options.customBin,
-        buildArgs: options.customArgs || ((prompt) => [prompt]),
-        cwd: (wp) => wp,
-        env: options.customEnv || {},
-      };
-    } else {
-      this._preset = AGENT_PRESETS[this.agentName];
-      if (!this._preset) throw new Error(`agent-runner: unknown agent preset "${this.agentName}"`);
-    }
+    // ── FIX #14: per-task log directory ───────────────────────────────────
+    this._logDir = config.logDir || process.env.AGENT_LOG_DIR || path.join(process.cwd(), 'agent-logs');
+    try { fs.mkdirSync(this._logDir, { recursive: true }); } catch (_) {}
   }
 
   /**
-   * Build the prompt for the coding agent
-   * @param {Object} task - { id, title, description, repo, branch }
-   * @param {string} worktreePath
-   * @returns {string}
-   */
-  buildPrompt(task, worktreePath) {
-    return [
-      `Task: ${task.title}`,
-      '',
-      task.description || '(no additional description)',
-      '',
-      'Instructions:',
-      `- You are working inside: ${worktreePath}`,
-      '- Make the code changes needed to complete this task.',
-      '- Run tests after making changes (npm test or the project test command).',
-      '- Fix any test failures before finishing.',
-      '- Stage and commit your changes with a descriptive commit message.',
-      '- Do NOT push — the factory will handle push/PR.',
-    ].join('\n');
-  }
-
-  /**
-   * Run the coding agent on a task inside a worktree.
+   * Execute an agent against the given worktree path.
    *
-   * @param {Object} task - task record
-   * @param {string} worktreePath - absolute path to the worktree
-   * @returns {Promise<Object>} - { success, exitCode, stdout, stderr, durationMs, agent, prompt }
+   * @param {Object} task
+   * @param {string} worktreePath  - absolute path to the isolated worktree
+   * @returns {Promise<{exitCode:number, output:string, error:string}>}
    */
-  run(task, worktreePath) {
-    return new Promise((resolve) => {
-      const prompt = this.buildPrompt(task, worktreePath);
-      const args = this._preset.buildArgs(prompt, worktreePath);
-      const cwd = this._preset.cwd(worktreePath);
-      const bin = this._preset.bin;
+  async run(task, worktreePath) {
+    const prompt = this._buildPrompt(task);
+    const args   = [...this.agentArgs, '--print', prompt];
+    const bin    = this.agentBin;
+    const cwd    = worktreePath;
+    const env    = { ...process.env };
 
-      const startTime = Date.now();
-      let stdout = '';
-      let stderr = '';
+    // ── FIX #14: open a per-task log file ─────────────────────────────────
+    const logFile   = path.join(this._logDir, `${task.id}.log`);
+    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+    const ts        = new Date().toISOString();
+    logStream.write(`\n=== Task ${task.id} started at ${ts} ===\n`);
+    logStream.write(`Prompt: ${prompt.slice(0, 200)}\n\n`);
+
+    return new Promise((resolve) => {
+      let output = '';
+      let errOut = '';
       let killed = false;
 
-      console.log(`[AgentRunner] Spawning ${bin} in ${cwd}`);
-      console.log(`[AgentRunner] Args: ${JSON.stringify(args).substring(0, 200)}`);
-
+      // ── FIX #2: spawn with detached:true so we get a process group ───────
       const child = spawn(bin, args, {
         cwd,
-        env: { ...process.env, ...this._preset.env },
-        stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: this.timeoutMs,
+        env,
+        stdio : ['ignore', 'pipe', 'pipe'],
+        detached: true,   // gives child its own process group
       });
+      child.unref(); // don't let child keep event loop alive
 
-      child.stdout.on('data', (chunk) => {
-        const text = chunk.toString();
-        if (stdout.length < this.maxOutputBytes) {
-          stdout += text.substring(0, this.maxOutputBytes - stdout.length);
+      // ── FIX #2: helper to kill the entire process group ──────────────────
+      const killGroup = (sig) => {
+        try {
+          process.kill(-child.pid, sig); // negative PID = kill process group
+        } catch (e) {
+          try { child.kill(sig); } catch (_) {} // fallback to direct kill
         }
-        if (this.onOutput) this.onOutput(text);
+      };
+
+      // ── FIX #2: timeout handler ───────────────────────────────────────────
+      const timer = setTimeout(() => {
+        killed = true;
+        console.warn(`[AgentRunner] Task ${task.id} timed out after ${this.timeoutMs}ms — killing process group`);
+        logStream.write(`\n[TIMEOUT] Killed at ${new Date().toISOString()}\n`);
+        killGroup('SIGTERM');
+        // Give it 5 s to clean up, then SIGKILL
+        setTimeout(() => killGroup('SIGKILL'), 5_000);
+      }, this.timeoutMs);
+
+      // ── FIX #14: stream stdout to log + caller callback ──────────────────
+      child.stdout.on('data', (chunk) => {
+        const str = chunk.toString();
+        output += str;
+        logStream.write(str);  // write to per-task log
+        if (this.onOutput) {
+          try { this.onOutput(str); } catch (_) {}
+        }
       });
 
       child.stderr.on('data', (chunk) => {
-        const text = chunk.toString();
-        if (stderr.length < this.maxOutputBytes) {
-          stderr += text.substring(0, this.maxOutputBytes - stderr.length);
+        const str = chunk.toString();
+        errOut += str;
+        logStream.write('[STDERR] ' + str);
+        if (this.onError) {
+          try { this.onError(str); } catch (_) {}
         }
       });
 
-      // Enforce timeout
-      const timer = setTimeout(() => {
-        killed = true;
-        child.kill('SIGTERM');
-        setTimeout(() => {
-          try { child.kill('SIGKILL'); } catch (_) {}
-        }, 5000);
-      }, this.timeoutMs);
-
       child.on('close', (code) => {
         clearTimeout(timer);
-        const durationMs = Date.now() - startTime;
-        const success = code === 0 && !killed;
+        const exitCode = killed ? -1 : (code ?? -1);
+        logStream.write(`\n=== Exited with code ${exitCode} at ${new Date().toISOString()} ===\n`);
+        logStream.end();
 
-        console.log(`[AgentRunner] ${bin} exited code=${code} killed=${killed} duration=${durationMs}ms`);
-
-        resolve({
-          success,
-          exitCode: code,
-          killed,
-          stdout: stdout.trim(),
-          stderr: stderr.trim(),
-          durationMs,
-          agent: this.agentName,
-          prompt,
-        });
+        if (killed) {
+          resolve({
+            exitCode: -1,
+            output,
+            error: `[AgentRunner] Task timed out after ${this.timeoutMs}ms`,
+          });
+        } else {
+          resolve({ exitCode, output, error: errOut });
+        }
       });
 
       child.on('error', (err) => {
         clearTimeout(timer);
-        const durationMs = Date.now() - startTime;
-
-        console.error(`[AgentRunner] spawn error: ${err.message}`);
-
-        resolve({
-          success: false,
-          exitCode: -1,
-          killed: false,
-          stdout: '',
-          stderr: err.message,
-          durationMs,
-          agent: this.agentName,
-          prompt,
-          spawnError: err.message,
-        });
+        logStream.write(`\n[SPAWN ERROR] ${err.message}\n`);
+        logStream.end();
+        resolve({ exitCode: -1, output, error: err.message });
       });
     });
   }
 
-  /**
-   * Check if the agent binary is available on PATH
-   * @returns {boolean}
-   */
-  isAvailable() {
-    try {
-      execSync(`which ${this._preset.bin}`, { stdio: 'pipe' });
-      return true;
-    } catch {
-      return false;
-    }
+  _buildPrompt(task) {
+    return [
+      `Task: ${task.title}`,
+      ``,
+      task.description || '(no description)',
+      ``,
+      `Repository: ${task.repo || '(current)'}`,
+      `Branch: ${task.branch || 'main'}`,
+    ].join('\n');
   }
 }
 
