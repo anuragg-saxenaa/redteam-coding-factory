@@ -264,6 +264,7 @@ redteam-coding-factory/
 
 Contributions are welcome! The factory follows the A2A coordination protocol documented in [`docs/A2A-COORDINATION-PROTOCOL.md`](docs/A2A-COORDINATION-PROTOCOL.md). Please read it before submitting PRs to avoid conflicts with autonomous workers.
 
+
 ---
 
 *Built and maintained by [@anuragg-saxenaa](https://github.com/anuragg-saxenaa)*
