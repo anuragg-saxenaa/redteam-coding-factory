@@ -1,10 +1,43 @@
+# Dependencies
 node_modules/
-# Factory runtime state (should not be committed)
+
+# Factory runtime data (never commit these)
 .factory-data/
-.factory-data-*/
 data/
 worktrees/
-.worktrees/
 
-# OS
+# Logs
+*.log
+agent-logs/
+
+# Config files with secrets
+factory.config.json
+.env
+.env.*
+!.env.example
+
+# Runtime state files
+metrics.json
+task-queue.jsonl
+task-queue.jsonl.tmp
+
+# Distributed lock file
+issue-watcher.lock
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Build artifacts
+dist/
+build/
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
