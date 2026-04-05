@@ -10,14 +10,49 @@
 
 ## 🚀 What Is This?
 
-**RedTeam Coding Factory** is a production-grade, autonomous software engineering pipeline. It watches GitHub repos for issues, implements fixes using AI agents across multiple tech stacks, runs lint/test/build gates, and opens pull requests — all without human intervention.
+**RedTeam Coding Factory** is a production-grade, autonomous software engineering pipeline. It operates across 3 workflow paths and 5 technology streams, running 24/7 inside **OpenClaw RedOS**.
+
+**3 Workflow Paths:**
+1. **Research → ENG** — RESEARCH agent discovers trending OSS repos (any language, 5k+ stars), writes specs, delegates to ENG for full implementation
+2. **Issue Watcher** — ENG watches GitHub issues every 15 min, implements fixes autonomously, opens PRs
+3. **On-Demand via RED** — User sends a repo to RED (CEO) via Telegram; RED delegates directly to ENG
 
 **Use it as:**
 - A standalone cron job in your own OpenClaw setup
 - An A2A sub-agent called from any AI agent flow
 - An npm library embedded in your own orchestration
 
-It runs 24/7 inside **OpenClaw RedOS** across 5 parallel technology streams.
+---
+
+## 🔄 Workflow Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    RedTeam Coding Factory                           │
+│                                                                     │
+│  PATH 1 — Autonomous OSS Discovery                                  │
+│  ──────────────────────────────────                                 │
+│  RESEARCH agent (every 3h)                                          │
+│    ↓ searches internet for trending repos (any language, 5k+ stars) │
+│    ↓ evaluates: activity, open issues, stack fit                    │
+│    ↓ writes spec to backlog.md                                      │
+│    ↓ sessions_spawn → ENG                                           │
+│  ENG: full implementation → tests → commit → PR (--no-edit)        │
+│                                                                     │
+│  PATH 2 — Issue Watcher (always-on)                                 │
+│  ──────────────────────────────────                                 │
+│  ENG polls decolua/9router every 15 min                             │
+│    ↓ picks concrete bug (<50 lines)                                 │
+│    ↓ implements full fix → tests → commit                          │
+│    ↓ gh pr create --no-edit                                         │
+│                                                                     │
+│  PATH 3 — On-Demand: Telegram → RED → ENG                          │
+│  ─────────────────────────────────────────                          │
+│  User sends repo to RED (CEO) via Telegram                          │
+│    ↓ RED delegates DIRECTLY to ENG (no research step)              │
+│    ↓ ENG: clone → pick issue → implement → PR                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -32,13 +67,14 @@ It runs 24/7 inside **OpenClaw RedOS** across 5 parallel technology streams.
 | **E — Claude+MCP** | Backlog Java projects | On-demand | Claude Code + context7 + Spring AI docs |
 
 **IssueWatcher:** decolua/9router — every 15 min  
-**PR Monitor:** all streams — every 4 hours (auto-fix CI failures)
+**PR Monitor:** all streams — every 4 hours (auto-fix CI failures)  
+**OSS Discovery:** RESEARCH agent — every 3 hours  
 
 **Recent autonomous PRs:** [#482](https://github.com/decolua/9router/pull/482) · [#487](https://github.com/decolua/9router/pull/487) · [#493](https://github.com/decolua/9router/pull/493)
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Full System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -72,6 +108,15 @@ It runs 24/7 inside **OpenClaw RedOS** across 5 parallel technology streams.
 │  │       → CriticGate → PushPRManager → MetricsWriter            │   │
 │  │       → SelfHealingCI (watch CI, auto-fix failures)           │   │
 │  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │           OpenClaw Agent Layer                                │   │
+│  │                                                               │   │
+│  │  RESEARCH ──(sessions_spawn)──▶ ENG ◀──(Telegram)── RED      │   │
+│  │  (OSS discovery,               (implements,         (CEO,     │   │
+│  │   any language,                 tests,               on-demand │  │
+│  │   10k+ stars)                   PRs)                 delegation│  │
+│  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -86,12 +131,30 @@ It runs 24/7 inside **OpenClaw RedOS** across 5 parallel technology streams.
 | **Phase 5** | Push/PR with Critic gate + `--no-edit` | ✅ |
 | **Phase 6** | Multi-repo orchestration + `RedTeamFactory` wrapper | ✅ |
 | **Phase 7** | Multi-stream parallel execution (A/B/C/D/E) | 🚧 |
+| **Phase 8** | Research→ENG OSS discovery pipeline | ✅ |
+| **Phase 9** | On-demand RED→ENG Telegram delegation | ✅ |
 
 ---
 
 ## 📦 Quick Start
 
-### Use as a standalone cron (OpenClaw)
+### Path 1: Research → ENG (Autonomous OSS Discovery)
+
+RESEARCH runs every 3h. When it finds a good repo, it delegates to ENG automatically.
+
+```json
+{
+  "id": "inner-loop-research-0001",
+  "agentId": "research",
+  "schedule": { "kind": "cron", "expr": "30 */3 * * *" },
+  "payload": {
+    "kind": "agentTurn",
+    "message": "Search for trending OSS repos (5k+ stars, any language). Write spec to backlog.md. sessions_spawn ENG to implement."
+  }
+}
+```
+
+### Path 2: Issue Watcher (standalone cron)
 
 ```json
 {
@@ -105,29 +168,19 @@ It runs 24/7 inside **OpenClaw RedOS** across 5 parallel technology streams.
 }
 ```
 
-### Use as an A2A sub-agent
+### Path 3: On-Demand via RED (Telegram)
 
-```javascript
-// From any OpenClaw agent
-await sessions_spawn({
-  agentId: "eng",
-  message: "Run coding factory: pick an issue from spring-projects/spring-ai, implement full fix, open PR. Use Stream A (Java 21 + Maven + JUnit 5)."
-});
+User sends to RED via Telegram:
+```
+Implement issue fixes for github.com/org/repo
 ```
 
-### CLI (standalone)
-
-```bash
-npm install -g redteam-coding-factory
-
-# Run with a config file
-redteam-factory run --config factory.config.json
-
-# Target a specific stream
-redteam-factory run --config factory.config.json --stream java-spring
-
-# Dry run (no push/PR)
-redteam-factory run --config factory.config.json --dry-run
+RED delegates to ENG:
+```javascript
+await sessions_spawn({
+  agentId: "eng",
+  message: "On-demand task from Telegram. Repo: org/repo. Pick concrete issue, implement full fix, run tests, open PR with --no-edit. Log to pr-log.md."
+});
 ```
 
 ### Programmatic (Node.js)
@@ -241,24 +294,22 @@ MyAgent agent = AiServices.builder(MyAgent.class).chatLanguageModel(model).build
 
 ## 🤝 Integration with Other OpenClaw Agents / AI Flows
 
-This factory is designed to be called from any AI agent:
-
 ```javascript
-// From OpenClaw RED (CEO agent)
+// PATH 1 — RESEARCH discovers, delegates to ENG
+// (automated via inner-loop-research-0001 cron every 3h)
 await sessions_spawn({
   agentId: "eng",
-  message: `
-    Run coding factory for stream: java-spring
-    Repo: spring-projects/spring-ai
-    Pick 1 concrete bug (not architecture discussion)
-    Implement full fix with Maven + JUnit 5
-    Open PR with --no-edit
-    Log result to workspace/projects/pr-log.md
-  `
+  message: "OSS discovery brief ready. New READY item in backlog.md: spring-ai-mcp-bridge. Implement using Stream A (Java 21 + Spring AI). Full implementation, tests, PR with --no-edit."
+});
+
+// PATH 3 — RED delegates on-demand Telegram request to ENG
+// (RED receives GitHub URL via Telegram, spawns ENG directly)
+await sessions_spawn({
+  agentId: "eng",
+  message: "On-demand task from Telegram (Anurag). Repo: decolua/9router. Pick most concrete open issue, implement full fix, open PR with --no-edit."
 });
 
 // From any other AI agent framework (LangChain, AutoGen, etc.)
-// POST to OpenClaw gateway:
 fetch('http://localhost:18789/v1/agent/eng/message', {
   headers: { 'Authorization': 'Bearer <token>' },
   body: JSON.stringify({ message: 'Run coding factory: Stream A, spring-ai repo' })
@@ -305,6 +356,7 @@ Every factory output is guaranteed:
 | Critic gate | Validates implementation before push |
 | CriticGate rejects stubs | Placeholder code is rejected and retried |
 | Dry-run mode | Test pipeline without side effects |
+| RESEARCH star threshold | Only contributes to repos with 5k+ stars |
 
 ---
 
@@ -344,6 +396,7 @@ See [`PRODUCTION-DEPLOYMENT.md`](PRODUCTION-DEPLOYMENT.md) for full setup includ
 1. Clone this repo into `workspace-eng/repos/redteam-coding-factory`
 2. Add an `eng-coding-factory` cron that calls the factory via `sessions_spawn`
 3. Set `model: minimax/MiniMax-M2.7` (Coding Plan key required)
+4. RESEARCH inner-loop handles OSS discovery automatically — no extra config needed
 
 ---
 

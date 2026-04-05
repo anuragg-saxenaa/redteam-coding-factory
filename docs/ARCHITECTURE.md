@@ -2,14 +2,63 @@
 
 ## Goal
 Produce PRs autonomously across multiple technology stacks with verifiable accountability:
-- every task is a GitHub Issue
+- every task is a GitHub Issue (or backlog spec)
 - every change is a PR linked to the issue
 - CI failures and review comments route back into the same session
-- humans only get pinged for judgment calls (L4/L5 approvals)
+- humans only get pinged for judgment calls (L4/L5 approvals) or on-demand requests via Telegram
 
 ---
 
-## Multi-Stream Design (Current)
+## 3-Part Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    RedTeam Coding Factory                           │
+│                         3 Workflow Paths                            │
+│                                                                     │
+│  PATH 1 — Autonomous OSS Discovery (RESEARCH → ENG)                │
+│  ──────────────────────────────────────────────────                 │
+│                                                                     │
+│   RESEARCH                          ENG                             │
+│   (every 3h)                        (triggered via A2A)             │
+│       │                                  │                          │
+│       ▼                                  ▼                          │
+│   web_search trending repos         reads backlog.md spec           │
+│   (any language, 5k+ stars)         clones repo                     │
+│   evaluate: stars, issues, fit      picks concrete issue            │
+│   write spec → backlog.md           implements FULL fix             │
+│   sessions_spawn(eng) ──────────▶   runs tests                      │
+│                                     git push + PR --no-edit         │
+│                                                                     │
+│  PATH 2 — Issue Watcher (ENG, always-on)                           │
+│  ────────────────────────────────────────                           │
+│                                                                     │
+│   [GitHub Issues]                   ENG (every 15 min)             │
+│       │                                  │                          │
+│       ▼                                  ▼                          │
+│   decolua/9router issues            IssueWatcher.poll()             │
+│   tagged: bug, help wanted          pick concrete bug (<50 lines)   │
+│                                     implement full fix               │
+│                                     mvn/npm/pytest/swift test       │
+│                                     gh pr create --no-edit          │
+│                                                                     │
+│  PATH 3 — On-Demand: Telegram → RED → ENG                          │
+│  ─────────────────────────────────────────                          │
+│                                                                     │
+│   User (Telegram)                   RED (CEO)         ENG           │
+│       │                                │               │             │
+│       ▼                                ▼               ▼             │
+│   "fix org/repo"  ──────────▶    receives msg    sessions_spawn     │
+│                                  acknowledges ──▶ clone repo         │
+│                                  (no research)   pick issue          │
+│                                                  implement           │
+│                                                  PR --no-edit        │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Multi-Stream Design
 
 The factory runs **5 parallel streams**, each targeting a different tech ecosystem:
 
@@ -93,10 +142,12 @@ Handles: Spring Boot scaffolding, Spring AI integrations, multi-file Java refact
 | **Phase 5** | Push/PR creation with Critic gate + `--no-edit` | ✅ Production |
 | **Phase 6** | Multi-repo orchestration + `RedTeamFactory` wrapper | ✅ Production |
 | **Phase 7** | Multi-stream (A/B/C/D/E) parallel execution | 🚧 Active |
+| **Phase 8** | Research→ENG OSS discovery pipeline | ✅ Production |
+| **Phase 9** | On-demand RED→ENG Telegram delegation | ✅ Production |
 
 ---
 
-## Execution Pipeline
+## Execution Pipeline (PATH 2 — Issue Watcher detail)
 
 ```
 GitHub Issue
@@ -133,13 +184,69 @@ SelfHealingCI.monitor()
 
 ---
 
+## RESEARCH → ENG Pipeline (PATH 1 detail)
+
+```
+RESEARCH inner-loop (every 3h)
+    │
+    ▼
+Check backlog.md — count READY items
+    │  if >= 5: skip OSS discovery
+    │  if < 5: run discovery
+    ▼
+web_search trending repos
+    │  queries: "trending github 2026 AI developer tools"
+    │  filter: stars >= 5000, active commits, open issues
+    ▼
+Evaluate stack fit
+    │  Java → Stream A | TS/JS → Stream B | Python → Stream C | Swift/RN → Stream D
+    ▼
+Write spec to backlog.md
+    │  ## N | repo-name ⭐ READY
+    │  Stack, Repo, Stars, Pain source, What to do, Stream
+    ▼
+sessions_spawn(agentId="eng")
+    │  message: "New READY item in backlog.md: <repo>. Implement using Stream X."
+    ▼
+ENG picks up task
+    │  reads spec → clones repo → picks issue → implements → tests → PR
+```
+
+---
+
+## On-Demand Pipeline (PATH 3 detail)
+
+```
+User → Telegram → RED (CEO agent)
+    │  message: "fix issues in org/repo" or GitHub URL
+    │
+    ▼
+RED recognizes on-demand repo request
+    │  pattern: GitHub URL or "implement/fix/add/pr for <repo>"
+    │
+    ▼
+RED acknowledges to user (within 60s)
+    │  "Delegated to ENG ✓ — will implement and open PR"
+    │
+    ▼
+sessions_spawn(agentId="eng")
+    │  NO research step — ENG goes directly
+    │  message: "On-demand task. Repo: org/repo. Pick issue, implement, PR --no-edit."
+    │
+    ▼
+ENG executes full pipeline
+    │  gh repo clone → issue list → pick → implement → test → push → PR
+```
+
+---
+
 ## A2A Reliability & Coordination
 
 A2A dispatch includes timeout-aware retries with fallback routing:
 
-- **Primary:** `sessions_send` to ENG agent
+- **Primary:** `sessions_spawn` to ENG agent
 - **Retry policy:** Timeout-only retries with exponential backoff + jitter
-- **Fallback:** `sessions_spawn` when retries are exhausted
+- **Fallback:** Write to `workspace/AUTONOMOUS.md` as `PENDING[ENG]` — ENG reads on next heartbeat
 
 Protocol and conflict rules: [`A2A-COORDINATION-PROTOCOL.md`](A2A-COORDINATION-PROTOCOL.md)
 
@@ -151,6 +258,8 @@ Protocol and conflict rules: [`A2A-COORDINATION-PROTOCOL.md`](A2A-COORDINATION-P
 |---|---|---|
 | A, E (Java/Spring AI) | MiniMax-M2.7 (1M ctx) | 9router/cu/default |
 | B, C, D | MiniMax-M2.5 (200K ctx) | 9router/cc/claude-haiku-4-5 |
+| RESEARCH | MiniMax-M2.5 | 9router/cu/default |
+| RED (CEO) | MiniMax-M2.5 | 9router/cu/default |
 
 Provider: MiniMax Coding Plan (`sk-cp-...`) — unlimited subscription.
 Never use `sk-api-...` Pay-as-you-go keys (separate balance, exhausts).
