@@ -388,6 +388,70 @@ redteam-coding-factory/
 
 ---
 
+## 🔌 Use as a Claude Code / MCP Plugin
+
+The coding factory ships as a **Model Context Protocol (MCP) server** — install it once and use it inside Claude Code, Codex, or any MCP-compatible AI agent.
+
+### Install globally
+
+```bash
+npm install -g redteam-coding-factory
+```
+
+### Add to Claude Code (`~/.claude/claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "coding-factory": {
+      "command": "coding-factory-mcp",
+      "env": {
+        "GITHUB_TOKEN": "ghp_...",
+        "FACTORY_WORKSPACE": "/path/to/your/workspace"
+      }
+    }
+  }
+}
+```
+
+Or with `npx` (no global install needed):
+
+```json
+{
+  "mcpServers": {
+    "coding-factory": {
+      "command": "npx",
+      "args": ["redteam-coding-factory", "--mcp"],
+      "env": {
+        "GITHUB_TOKEN": "ghp_...",
+        "FACTORY_WORKSPACE": "/path/to/your/workspace"
+      }
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+Once installed, these tools are available inside Claude Code / any MCP agent:
+
+| Tool | Description |
+|---|---|
+| `run_issue_watcher` | Pick open GitHub issues, implement full fixes, open PRs. Supports `auto` stream detection. |
+| `run_oss_discovery` | Search trending GitHub repos, evaluate fit, write contribution specs. |
+| `get_pr_log` | Get the log of all PRs opened by the factory. |
+| `get_factory_status` | Current status of all coding factory streams and recent activity. |
+
+### Example usage in Claude Code
+
+```
+Use the coding-factory MCP tool to run_issue_watcher on spring-projects/spring-ai with max_prs=3
+```
+
+The factory auto-detects the technology stream from the repo name (Spring/Java → `java-spring`, Swift/iOS → `mobile`, etc.).
+
+---
+
 ## 🚢 Production Deployment
 
 See [`PRODUCTION-DEPLOYMENT.md`](PRODUCTION-DEPLOYMENT.md) for full setup including OpenClaw integration, secrets, and monitoring.
