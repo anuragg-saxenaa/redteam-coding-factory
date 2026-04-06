@@ -1,10 +1,45 @@
 # 🏭 RedTeam Coding Factory
 
-> Autonomous, multi-stream coding factory — picks GitHub issues, implements full fixes across Java/Spring AI/TypeScript/Python/Mobile stacks, and opens PRs without human intervention. Pluggable into any OpenClaw agent or AI agent flow.
+> Autonomous, multi-stream coding factory — picks GitHub issues, implements full fixes across Java/Spring AI/TypeScript/Python/Mobile stacks, and opens PRs without human intervention. Use it as a Claude Code plugin, a standalone tool, or an OpenClaw agent.
 
 [![Tests](https://img.shields.io/badge/tests-3%20suites%20passing-brightgreen)](#testing)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-blue)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#)
+[![MCP](https://img.shields.io/badge/Claude%20Code-MCP%20Plugin-blueviolet)](#-use-as-a-claude-code--mcp-plugin)
+
+---
+
+## ⚡ Quickstart — Claude Code Plugin
+
+The fastest way to use this: install as an MCP plugin inside **Claude Code** or **Codex**.
+
+```bash
+npm install -g redteam-coding-factory
+```
+
+Add to `~/.claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "coding-factory": {
+      "command": "coding-factory-mcp",
+      "env": {
+        "GITHUB_TOKEN": "ghp_YOUR_TOKEN_HERE",
+        "FACTORY_WORKSPACE": "/path/to/your/workspace"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Code. Then just ask:
+
+```
+Run the coding factory on spring-projects/spring-ai — pick an open issue and open a PR
+```
+
+**Full installation guide → [`docs/CLAUDE-CODE-PLUGIN.md`](docs/CLAUDE-CODE-PLUGIN.md)**
 
 ---
 
@@ -18,6 +53,7 @@
 3. **On-Demand via RED** — User sends a repo to RED (CEO) via Telegram; RED delegates directly to ENG
 
 **Use it as:**
+- A **Claude Code / Codex MCP plugin** — 4 tools available directly in your AI session
 - A standalone cron job in your own OpenClaw setup
 - An A2A sub-agent called from any AI agent flow
 - An npm library embedded in your own orchestration
@@ -390,65 +426,46 @@ redteam-coding-factory/
 
 ## 🔌 Use as a Claude Code / MCP Plugin
 
-The coding factory ships as a **Model Context Protocol (MCP) server** — install it once and use it inside Claude Code, Codex, or any MCP-compatible AI agent.
+The coding factory ships as a **Model Context Protocol (MCP) server** — install once, use from Claude Code, Codex, or any MCP-compatible agent.
 
-### Install globally
+### Available Tools
 
+| Tool | Description |
+|---|---|
+| `run_issue_watcher` | Pick open GitHub issues, implement full fixes, open PRs (auto-detects stream) |
+| `run_oss_discovery` | Search trending GitHub repos, evaluate fit, write contribution specs |
+| `get_pr_log` | Get the log of all PRs opened by the factory |
+| `get_factory_status` | Current status of all streams and recent activity |
+
+### Quick Setup (3 steps)
+
+**1. Install**
 ```bash
 npm install -g redteam-coding-factory
 ```
 
-### Add to Claude Code (`~/.claude/claude_desktop_config.json`)
-
+**2. Add to `~/.claude/claude_desktop_config.json`**
 ```json
 {
   "mcpServers": {
     "coding-factory": {
       "command": "coding-factory-mcp",
       "env": {
-        "GITHUB_TOKEN": "ghp_...",
-        "FACTORY_WORKSPACE": "/path/to/your/workspace"
+        "GITHUB_TOKEN": "ghp_YOUR_TOKEN_HERE",
+        "FACTORY_WORKSPACE": "/path/to/workspace"
       }
     }
   }
 }
 ```
 
-Or with `npx` (no global install needed):
-
-```json
-{
-  "mcpServers": {
-    "coding-factory": {
-      "command": "npx",
-      "args": ["redteam-coding-factory", "--mcp"],
-      "env": {
-        "GITHUB_TOKEN": "ghp_...",
-        "FACTORY_WORKSPACE": "/path/to/your/workspace"
-      }
-    }
-  }
-}
+**3. Restart Claude Code and ask:**
+```
+Use run_issue_watcher on spring-projects/spring-ai, max_prs=2
 ```
 
-### Available MCP Tools
-
-Once installed, these tools are available inside Claude Code / any MCP agent:
-
-| Tool | Description |
-|---|---|
-| `run_issue_watcher` | Pick open GitHub issues, implement full fixes, open PRs. Supports `auto` stream detection. |
-| `run_oss_discovery` | Search trending GitHub repos, evaluate fit, write contribution specs. |
-| `get_pr_log` | Get the log of all PRs opened by the factory. |
-| `get_factory_status` | Current status of all coding factory streams and recent activity. |
-
-### Example usage in Claude Code
-
-```
-Use the coding-factory MCP tool to run_issue_watcher on spring-projects/spring-ai with max_prs=3
-```
-
-The factory auto-detects the technology stream from the repo name (Spring/Java → `java-spring`, Swift/iOS → `mobile`, etc.).
+**Full guide with troubleshooting, all parameters, npx setup, and Codex instructions:**
+**→ [`docs/CLAUDE-CODE-PLUGIN.md`](docs/CLAUDE-CODE-PLUGIN.md)**
 
 ---
 
@@ -466,8 +483,22 @@ See [`PRODUCTION-DEPLOYMENT.md`](PRODUCTION-DEPLOYMENT.md) for full setup includ
 
 ## 🤝 Contributing
 
-PRs welcome! This factory uses itself to manage its own contributions. Read [`docs/A2A-COORDINATION-PROTOCOL.md`](docs/A2A-COORDINATION-PROTOCOL.md) before submitting to avoid conflicts with autonomous workers.
+PRs welcome — this is an open-source project and community contributions are encouraged!
+
+**Ways to contribute:**
+- Add a new technology stream (Rust, Go, PHP, etc.)
+- Improve issue-picking heuristics for a language you know well
+- Add support for a new AI framework (Haystack, CrewAI, AutoGen, etc.)
+- Fix bugs or improve test coverage
+- Improve the Claude Code / MCP plugin experience
+
+**Before submitting:**
+- Read [`docs/A2A-COORDINATION-PROTOCOL.md`](docs/A2A-COORDINATION-PROTOCOL.md) to avoid conflicts with autonomous workers (this factory uses itself)
+- Run `npm test` — all suites must pass
+- For new streams, add at least one integration test in `test/`
+
+This factory is self-hosted and runs autonomously — it may pick up your issues and open PRs before you do. That's intentional.
 
 ---
 
-*Built and maintained by [@anuragg-saxenaa](https://github.com/anuragg-saxenaa) · Running 24/7 inside OpenClaw RedOS*
+*Built and maintained by [@anuragg-saxenaa](https://github.com/anuragg-saxenaa) · Running 24/7 · MIT License*
