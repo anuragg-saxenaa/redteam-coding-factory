@@ -155,6 +155,9 @@ GitHub Issue
     ▼
 IssueWatcher.poll()
     │  filters: concrete bugs, <60 lines, no open PR from anuragg-saxenaa
+    │  dedup check: gh issue view <N> --json linkedPullRequests
+    │               gh pr list --repo <org/repo> --state open --search "<N>"
+    │  → skip issue entirely if any open PR already covers the fix
     ▼
 WorktreeManager.create()
     │  git checkout -b fix/issue-<N>-<slug>
@@ -273,3 +276,34 @@ Every output from the factory is guaranteed:
 - ✅ **Tested** — real assertions with the repo's own test framework
 - ✅ **Builds clean** — `mvn verify` / `npm run build` / `pytest` / `swift build` passes
 - ✅ **Conventional commits** — `fix:`, `feat:`, `refactor:` prefixes with issue reference
+
+---
+
+## Deduplication Rule — Check Before You Fix
+
+**Before starting work on any issue, always verify no open PR already covers it.**
+
+Duplicate PRs waste time and must be immediately closed with an embarrassing note. This is a hard rule — no exceptions.
+
+### Check commands (run both)
+
+```bash
+# 1. Check issue's linked PRs
+gh issue view <N> --json linkedPullRequests --repo <org/repo>
+
+# 2. Search open PRs mentioning the issue number
+gh pr list --repo <org/repo> --state open --search "<N>"
+```
+
+### Decision logic
+
+```
+linkedPullRequests is non-empty   →  SKIP — PR already exists, move to next issue
+open PR search returns results    →  SKIP — PR already exists, move to next issue
+both empty                        →  PROCEED with fix
+```
+
+### Why this rule exists
+
+PR anuragg-saxenaa/feign#3308 was opened without checking — it was a duplicate of already-open #3277 and had to be immediately closed.
+Opening a duplicate PR is wasted effort and creates noise for maintainers.
