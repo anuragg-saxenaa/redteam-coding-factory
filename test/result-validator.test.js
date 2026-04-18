@@ -74,7 +74,7 @@ function testArtifactCollection() {
   const result = validator.validate(task, executionResult, 'default');
 
   assert(result.artifacts.length > 0, 'should produce at least one artifact');
-  const lintFail = result.artifacts.find(a => a.type === 'stage_failure');
+  const lintFail = result.artifacts.find(a => a.type === 'error_log');
   assert(lintFail, 'should have lint failure artifact');
   assert.strictEqual(lintFail.step, 'lint');
 }
