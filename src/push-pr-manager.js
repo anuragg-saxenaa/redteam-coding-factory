@@ -185,4 +185,6 @@ class PushPRManager {
   }
 }
 
-module.exports = PushPRManager;
+// ESM default export — enables: import Factory from './push-pr-manager.js'
+export default PushPRManager;
+export { PushPRManager };

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
-const WorktreeManager = require('../src/worktree-manager');
+import assert from 'assert';
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+import { WorktreeManager } from '../src/worktree-manager.js';
 
 const TEST_ROOT = path.join(__dirname, '.worktree-manager-test');
 const BASE_BARE = path.join(TEST_ROOT, 'base.git');

@@ -1,10 +1,11 @@
+#!/usr/bin/env node
 /**
  * Issue Watcher Tests — Phase 2
  * Tests the polling daemon that bridges GitHub issues → factory pipeline
  */
 
-const IssueWatcher = require('../src/issue-watcher');
-const assert = require('assert');
+import { IssueWatcher } from '../src/issue-watcher.js';
+import assert from 'assert';
 
 let passed = 0;
 let failed = 0;
@@ -128,7 +129,7 @@ console.log('Test 6: Stop sets state');
   ok(watcher._timer === null, 'timer cleared');
 }
 
-(async () => {
+async function runAsyncTests() {
   // --- Test 7: pollOnce requires config ---
   console.log('Test 7: pollOnce requires config');
   {
@@ -343,4 +344,6 @@ console.log('Test 6: Stop sets state');
   console.log('');
   console.log(`=== Issue Watcher Tests: ${passed} passed, ${failed} failed ===`);
   process.exit(failed > 0 ? 1 : 0);
-})();
+}
+
+runAsyncTests();

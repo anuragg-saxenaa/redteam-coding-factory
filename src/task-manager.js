@@ -136,4 +136,6 @@ class TaskManager {
   }
 }
 
-module.exports = TaskManager;
+// ESM default export — enables: import Factory from './task-manager.js'
+export default TaskManager;
+export { TaskManager };

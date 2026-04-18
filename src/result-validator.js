@@ -117,4 +117,6 @@ class ResultValidator {
   }
 }
 
-module.exports = ResultValidator;
+// ESM default export — enables: import Factory from './result-validator.js'
+export default ResultValidator;
+export { ResultValidator };

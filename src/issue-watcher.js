@@ -354,4 +354,5 @@ class IssueWatcher {
   }
 }
 
-module.exports = IssueWatcher;
+// ESM default export — enables: import Factory from './issue-watcher.js'
+export default IssueWatcher;

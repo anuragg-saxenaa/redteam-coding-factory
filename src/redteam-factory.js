@@ -203,4 +203,6 @@ class RedTeamFactory {
   }
 }
 
-module.exports = RedTeamFactory;
+// ESM default export — enables: import Factory from './redteam-factory.js'
+export default RedTeamFactory;
+export { RedTeamFactory };

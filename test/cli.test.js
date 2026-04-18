@@ -1,8 +1,8 @@
-const assert = require('assert');
-const fs = require('fs');
-const os = require('os');
-const { spawnSync } = require('child_process');
-const path = require('path');
+import assert from 'assert';
+import fs from 'fs';
+import os from 'os';
+import { spawnSync } from 'child_process';
+import path from 'path';
 
 // Smoke test: CLI help prints and exits 0.
 const cli = path.join(__dirname, '..', 'src', 'cli.js');

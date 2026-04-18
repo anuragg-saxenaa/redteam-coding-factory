@@ -81,7 +81,4 @@ function evaluateGovernance(policy, baselineReport, candidateReport) {
   };
 }
 
-module.exports = {
-  readJson,
-  evaluateGovernance,
-};
+export { readJson, evaluateGovernance };

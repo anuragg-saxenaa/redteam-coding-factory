@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { evaluateGovernance } = require('../src/llm-test-governance');
+import { evaluateGovernance } from '../src/llm-test-governance.js';
 
 let passed = 0;
 let failed = 0;

@@ -261,9 +261,5 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
-  parseArgs,
-  readJson,
-  normalizeTasks,
-  main,
-};
+export { parseArgs, readJson, normalizeTasks, main };
+module.exports = { parseArgs, readJson, normalizeTasks, main };

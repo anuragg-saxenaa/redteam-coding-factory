@@ -289,4 +289,6 @@ class CodingFactory {
   }
 }
 
-module.exports = CodingFactory;
+// ESM default export — enables: import Factory from './factory.js'
+export default CodingFactory;
+export { CodingFactory };

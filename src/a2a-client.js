@@ -153,4 +153,6 @@ class A2AClient {
   }
 }
 
-module.exports = A2AClient;
+// ESM default export — enables: import Factory from './a2a-client.js'
+export default A2AClient;
+export { A2AClient };

@@ -147,4 +147,6 @@ class AgentRunner {
   }
 }
 
-module.exports = AgentRunner;
+// ESM default export — enables: import Factory from './agent-runner.js'
+export default AgentRunner;
+export { AgentRunner };

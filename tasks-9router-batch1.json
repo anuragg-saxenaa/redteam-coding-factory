@@ -1,0 +1,22 @@
+[
+  {
+    "repo": "9router",
+    "branch": "master",
+    "title": "fix: Vertex AI multiple incompatibilities via OpenAI-compatible bridge (closes #388)",
+    "description": "Fix several Vertex AI bugs in the OpenAI-compatible /v1/chat/completions bridge. Issues reported in decolua/9router#388:\n\n1. Vertex URL building produces invalid project/resource paths (RESOURCE_PROJECT_INVALID) — fix URL shape to use projects/{projectId}/locations/{location}/publishers/google/models/...\n2. Streaming requires ?alt=sse query param — add it when streaming is enabled\n3. functionCall.id / functionResponse.id fields are unsupported by Vertex — strip them from payloads\n4. Tool schema includes unsupported patternProperties — sanitize before sending to Vertex\n5. Fake thoughtSignature / reasoning_content injected into Vertex request history causes 400 errors — stop injecting synthetic thought signatures\n6. Real Vertex thought signature not preserved across OpenAI-compatible round trips — emit via reasoning_details in assistant tool-call responses, read back when reconstructing Vertex functionCall history, match reasoning_details.id with normalized tool_calls.id\n\nFiles to look at: open-sse/services/vertex*.js, open-sse/adapters/vertex*.js, open-sse/translators/vertex*.js (or equivalent Vertex executor files in the codebase).\n\nAll fixes should be backwards-compatible.",
+    "metadata": {
+      "issueNumber": 388,
+      "issueUrl": "https://github.com/decolua/9router/issues/388"
+    }
+  },
+  {
+    "repo": "9router",
+    "branch": "master",
+    "title": "fix: 406 error on /v1/responses endpoint breaks Fabric-AI and other OpenAI clients (closes #389)",
+    "description": "Issue decolua/9router#389: When using 9router as an OpenAI-compatible backend with clients like Fabric-AI, POST to /v1/responses returns 406 Not Acceptable. The client sends standard OpenAI chat completions requests to /v1/chat/completions and gets 406 errors.\n\nInvestigate: why does /v1/responses return 406 for standard chat completions requests? Check if the route handler validates Content-Type or Accept headers too strictly. The fix should ensure that standard OpenAI clients (sending application/json, expecting application/json) can use 9router as a drop-in backend without 406 errors.",
+    "metadata": {
+      "issueNumber": 389,
+      "issueUrl": "https://github.com/decolua/9router/issues/389"
+    }
+  }
+]

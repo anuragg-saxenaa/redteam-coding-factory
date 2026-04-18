@@ -197,4 +197,6 @@ class GitHubIntake {
   }
 }
 
-module.exports = GitHubIntake;
+// ESM default export — enables: import Factory from './github-intake.js'
+export default GitHubIntake;
+export { GitHubIntake };

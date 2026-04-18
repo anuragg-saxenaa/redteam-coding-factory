@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { evaluateCopilotReviewMetrics } = require('../src/copilot-review-metrics');
+import { evaluateCopilotReviewMetrics } from '../src/copilot-review-metrics.js';
 
 let passed = 0;
 let failed = 0;

@@ -112,4 +112,6 @@ ${task.parentTaskId ? `\`${task.parentTaskId}\`` : 'N/A'}
   }
 }
 
-module.exports = CriticGate;
+// ESM default export — enables: import Factory from './critic-gate.js'
+export default CriticGate;
+export { CriticGate };

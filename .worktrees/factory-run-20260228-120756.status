@@ -1,0 +1,8 @@
+branch=poc/task-20260228-120756
+worktree=/Users/redinside/Development/Codebase/projects/RedTeam/github/redteam-coding-factory/.worktrees/poc/task-20260228-120756
+agent=custom
+agent_rc=0
+test_cmd=echo test-ok
+test_rc=0
+result=pass
+timestamp=2026-02-28T17:07:56Z

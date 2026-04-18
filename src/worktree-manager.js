@@ -189,4 +189,6 @@ class WorktreeManager {
   }
 }
 
-module.exports = WorktreeManager;
+// ESM default export — enables: import Factory from './worktree-manager.js'
+export default WorktreeManager;
+export { WorktreeManager };

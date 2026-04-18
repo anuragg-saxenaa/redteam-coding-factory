@@ -216,4 +216,6 @@ class AgentIntegration {
   }
 }
 
-module.exports = AgentIntegration;
+// ESM default export — enables: import Factory from './agent-integration.js'
+export default AgentIntegration;
+export { AgentIntegration };

@@ -309,4 +309,6 @@ class MultiRepoOrchestrator {
   }
 }
 
-module.exports = MultiRepoOrchestrator;
+// ESM default export — enables: import Factory from './multi-repo-orchestrator.js'
+export default MultiRepoOrchestrator;
+export { MultiRepoOrchestrator };

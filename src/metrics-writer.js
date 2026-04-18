@@ -143,4 +143,6 @@ class MetricsWriter {
   }
 }
 
-module.exports = MetricsWriter;
+// ESM default export — enables: import Factory from './metrics-writer.js'
+export default MetricsWriter;
+export { MetricsWriter };

@@ -299,4 +299,6 @@ class CodeExecutor {
   }
 }
 
-module.exports = CodeExecutor;
+// ESM default export — enables: import Factory from './code-executor.js'
+export default CodeExecutor;
+export { CodeExecutor };

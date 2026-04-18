@@ -3,10 +3,10 @@
  * Integration Test Suite for Coding Factory Phase 6 — Multi-Repo Orchestration
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
-const MultiRepoOrchestrator = require('../src/multi-repo-orchestrator');
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+import { MultiRepoOrchestrator } from '../src/multi-repo-orchestrator.js';
 
 const TEST_DIR = path.join(__dirname, 'phase6-test-repos');
 const REPO_1_BARE = path.join(TEST_DIR, 'repo1.git');
