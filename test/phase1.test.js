@@ -8,8 +8,9 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { CodingFactory } from '../src/factory.js';
+import { fileURLToPath } from 'url';
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
-// Test setup: create a temporary test repo
 const testDir = path.join(__dirname, '.test-repo');
 const worktreeDir = path.join(testDir, 'worktrees');
 const dataDir = path.join(testDir, 'data');

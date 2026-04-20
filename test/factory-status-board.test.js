@@ -4,6 +4,8 @@ import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
+import { fileURLToPath } from 'url';
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 const TEST_ROOT = path.join(__dirname, '.factory-status-board-test');
 const REPO_ROOT = path.join(TEST_ROOT, 'repo');

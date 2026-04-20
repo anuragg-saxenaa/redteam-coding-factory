@@ -8,6 +8,8 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { RedTeamFactory } from '../src/redteam-factory.js';
+import { fileURLToPath } from 'url';
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 const TEST_DIR = path.join(__dirname, 'redteam-factory-test');
 const REPO_1_BARE = path.join(TEST_DIR, 'redteam-repo1.git');

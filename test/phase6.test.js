@@ -7,6 +7,8 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { MultiRepoOrchestrator } from '../src/multi-repo-orchestrator.js';
+import { fileURLToPath } from 'url';
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 const TEST_DIR = path.join(__dirname, 'phase6-test-repos');
 const REPO_1_BARE = path.join(TEST_DIR, 'repo1.git');
