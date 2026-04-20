@@ -8,13 +8,11 @@
  *       intentional and can restart on schedule rather than immediately.
  */
 
-'use strict';
-
-const path   = require('path');
-const fs     = require('fs');
-const MultiRepoOrchestrator = require('./multi-repo-orchestrator');
-const DashboardService      = require('./dashboard/dashboard-service');
-const CodingFactory         = require('./factory');
+import path from 'node:path';
+import fs from 'node:fs';
+import MultiRepoOrchestrator from './multi-repo-orchestrator.js';
+import DashboardService from './dashboard/dashboard-service.js';
+import CodingFactory from './factory.js';
 
 class RedTeamFactory {
   constructor(config = {}) {
@@ -203,6 +201,5 @@ class RedTeamFactory {
   }
 }
 
-// ESM default export — enables: import Factory from './redteam-factory.js'
 export default RedTeamFactory;
 export { RedTeamFactory };

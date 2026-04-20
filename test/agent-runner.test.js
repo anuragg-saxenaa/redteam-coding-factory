@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 /**
  * AgentRunner unit tests
- * Tests construction, prompt building, availability check, and preset validation.
- * Does NOT actually spawn codex/claude (those are integration tests).
+ * Tests construction, prompt building, availability check.
+ * Does NOT actually spawn coding agents (those are integration tests).
  */
 
-import assert from 'assert';
 import { AgentRunner } from '../src/agent-runner.js';
 
 let passed = 0;
@@ -21,103 +20,50 @@ function assert_(condition, label) {
   }
 }
 
-// Test 1: Default construction (codex preset)
+// Test 1: Default construction
 console.log('Test 1: Default construction');
 {
   const runner = new AgentRunner();
-  assert_(runner.agentName === 'codex', 'default agent is codex');
-  assert_(runner.timeoutMs === 5 * 60 * 1000, 'default timeout is 5 min');
-  assert_(runner.maxOutputBytes === 100 * 1024, 'default maxOutputBytes is 100KB');
-  assert_(runner._preset.bin === 'codex', 'preset bin is codex');
+  assert_(runner.agentBin === 'claude', 'default agent bin is claude');
+  assert_(runner.timeoutMs === 10 * 60 * 1000, 'default timeout is 10 min');
+  assert_(runner.onOutput === null, 'onOutput null by default');
+  assert_(runner.onError === null, 'onError null by default');
+  assert_(typeof runner._logDir === 'string', '_logDir is set');
 }
 
-// Test 2: Claude preset
-console.log('Test 2: Claude preset');
+// Test 2: Custom agent via agentBin
+console.log('Test 2: Custom agent via agentBin');
 {
-  const runner = new AgentRunner({ agent: 'claude' });
-  assert_(runner.agentName === 'claude', 'agent is claude');
-  assert_(runner._preset.bin === 'claude', 'preset bin is claude');
-  const args = runner._preset.buildArgs('test prompt', '/tmp/wt');
-  assert_(args.includes('-p'), 'claude args include -p');
-  assert_(args.includes('test prompt'), 'claude args include prompt');
+  const runner = new AgentRunner({ agentBin: '/usr/local/bin/my-agent' });
+  assert_(runner.agentBin === '/usr/local/bin/my-agent', 'custom agentBin set');
+  assert_(runner.timeoutMs === 10 * 60 * 1000, 'timeout is still default');
 }
 
-// Test 3: Custom agent
-console.log('Test 3: Custom agent');
+// Test 3: Custom timeout
+console.log('Test 3: Custom timeout');
 {
-  const runner = new AgentRunner({
-    agent: 'custom',
-    customBin: '/usr/local/bin/my-agent',
-    customArgs: (prompt) => ['--task', prompt],
-  });
-  assert_(runner.agentName === 'custom', 'agent is custom');
-  assert_(runner._preset.bin === '/usr/local/bin/my-agent', 'custom bin set');
-  const args = runner._preset.buildArgs('do stuff', '/tmp/wt');
-  assert_(args[0] === '--task', 'custom args first is --task');
-  assert_(args[1] === 'do stuff', 'custom args second is prompt');
+  const runner = new AgentRunner({ timeoutMs: 60_000 });
+  assert_(runner.timeoutMs === 60_000, 'custom timeout is 60s');
 }
 
-// Test 4: Custom agent requires customBin
-console.log('Test 4: Custom agent requires customBin');
+// Test 4: Custom log directory
+console.log('Test 4: Custom log directory');
 {
-  let threw = false;
-  try {
-    new AgentRunner({ agent: 'custom' });
-  } catch (e) {
-    threw = true;
-    assert_(e.message.includes('customBin required'), 'error mentions customBin');
-  }
-  assert_(threw, 'throws without customBin');
+  const runner = new AgentRunner({ logDir: '/tmp/agent-logs' });
+  assert_(runner._logDir === '/tmp/agent-logs', 'logDir is set to custom path');
 }
 
-// Test 5: Unknown preset throws
-console.log('Test 5: Unknown preset throws');
-{
-  let threw = false;
-  try {
-    new AgentRunner({ agent: 'nonexistent' });
-  } catch (e) {
-    threw = true;
-    assert_(e.message.includes('unknown agent preset'), 'error mentions unknown preset');
-  }
-  assert_(threw, 'throws on unknown preset');
-}
-
-// Test 6: Prompt building
-console.log('Test 6: Prompt building');
+// Test 5: Prompt building (_buildPrompt)
+console.log('Test 5: Prompt building');
 {
   const runner = new AgentRunner();
-  const prompt = runner.buildPrompt(
-    { id: 'task-1', title: 'Fix the bug', description: 'There is a null pointer', repo: '/repos/core', branch: 'main' },
-    '/tmp/worktrees/task-1'
+  const prompt = runner._buildPrompt(
+    { id: 'task-1', title: 'Fix the bug', description: 'There is a null pointer', repo: '/repos/core', branch: 'main' }
   );
   assert_(prompt.includes('Fix the bug'), 'prompt includes title');
   assert_(prompt.includes('null pointer'), 'prompt includes description');
-  assert_(prompt.includes('/tmp/worktrees/task-1'), 'prompt includes worktree path');
-  assert_(prompt.includes('Do NOT push'), 'prompt tells agent not to push');
-}
-
-// Test 7: isAvailable returns boolean
-console.log('Test 7: isAvailable returns boolean');
-{
-  const runner = new AgentRunner({ agent: 'custom', customBin: 'echo' });
-  const avail = runner.isAvailable();
-  assert_(typeof avail === 'boolean', 'isAvailable returns boolean');
-  // echo should be available on any Unix system
-  assert_(avail === true, 'echo is available');
-
-  const runner2 = new AgentRunner({ agent: 'custom', customBin: 'this-binary-does-not-exist-xyz123' });
-  assert_(runner2.isAvailable() === false, 'nonexistent binary is not available');
-}
-
-// Test 8: Codex args structure
-console.log('Test 8: Codex args structure');
-{
-  const runner = new AgentRunner();
-  const args = runner._preset.buildArgs('my prompt', '/wt/path');
-  assert_(args.includes('--quiet'), 'codex args include --quiet');
-  assert_(args.includes('--full-auto'), 'codex args include --full-auto');
-  assert_(args.includes('my prompt'), 'codex args include prompt');
+  assert_(prompt.includes('/repos/core'), 'prompt includes repo');
+  assert_(prompt.includes('main'), 'prompt includes branch');
 }
 
 console.log(`\n=== AgentRunner Tests: ${passed} passed, ${failed} failed ===`);

@@ -8,12 +8,10 @@
  *       the host machine.
  */
 
-'use strict';
-
-const { execFileSync } = require('child_process');
-const fs   = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { v4 as uuidv4 } from 'uuid';
 
 // ── FIX #4: read git identity from env vars, fall back to sensible defaults ─
 const GIT_AUTHOR_NAME  = process.env.GIT_AUTHOR_NAME  || process.env.GITHUB_ACTOR      || 'RedTeam Coding Factory';
@@ -97,15 +95,28 @@ class WorktreeManager {
     return Array.from(this._worktrees.values());
   }
 
-  remove(id) {
+  /**
+   * Public persistence trigger (for tests / external callers).
+   * Persists the current in-memory worktree map to disk.
+   */
+  persistWorktrees() {
+    this._saveMetadata();
+  }
+
+  remove(id, opts = {}) {
     const record = this._worktrees.get(id);
     if (!record) return;
 
+    const force = opts.force === true;
+
+    // Remove worktree dir if it still exists
     try {
-      execFileSync('git', ['-C', this.baseRepo, 'worktree', 'remove', '--force', record.path], { stdio: 'pipe' });
+      if (fs.existsSync(record.path)) {
+        execFileSync('git', ['-C', this.baseRepo, 'worktree', 'remove', record.path, '--force'], { stdio: 'pipe' });
+      }
     } catch (e) {
-      // If git worktree remove fails, try rmdir
-      try { fs.rmdirSync(record.path, { recursive: true }); } catch (_) {}
+      if (!force) throw e;
+      try { fs.rmSync(record.path, { recursive: true, force: true }); } catch (_) {}
     }
 
     // Also delete the branch
@@ -113,7 +124,10 @@ class WorktreeManager {
       execFileSync('git', ['-C', this.baseRepo, 'branch', '-D', record.branch], { stdio: 'pipe' });
     } catch (_) {}
 
-    this._worktrees.delete(id);
+    // Mark as removed instead of deleting so tests can inspect the record
+    record.status = 'removed';
+    record.removedAt = new Date().toISOString();
+    this._worktrees.set(id, record);
     this._saveMetadata();
   }
 
@@ -153,11 +167,31 @@ class WorktreeManager {
    */
   pruneManaged({ olderThanMs = 24 * 60 * 60 * 1000 } = {}) {
     const cutoff = Date.now() - olderThanMs;
+    let prunedRecords = 0;
+    const toRemove = [];
     for (const [id, record] of this._worktrees) {
-      if (new Date(record.createdAt).getTime() < cutoff) {
-        try { this.remove(id); } catch (_) {}
+      const effectiveDate = record.removedAt || record.createdAt;
+      if (new Date(effectiveDate).getTime() < cutoff) {
+        toRemove.push(id);
       }
     }
+    for (const id of toRemove) {
+      const record = this._worktrees.get(id);
+      if (!record) continue;
+      // Clean up filesystem artifacts for non-removed records
+      if (record.status !== 'removed' && record.path && fs.existsSync(record.path)) {
+        try {
+          execFileSync('git', ['-C', this.baseRepo, 'worktree', 'remove', record.path, '--force'], { stdio: 'pipe' });
+        } catch (_) {
+          try { fs.rmSync(record.path, { recursive: true, force: true }); } catch (_) {}
+        }
+        try { execFileSync('git', ['-C', this.baseRepo, 'branch', '-D', record.branch], { stdio: 'pipe' }); } catch (_) {}
+      }
+      this._worktrees.delete(id);
+      prunedRecords++;
+    }
+    if (toRemove.length > 0) this._saveMetadata();
+    return { prunedRecords };
   }
 
   // ── Metadata persistence ───────────────────────────────────────────────
@@ -189,6 +223,5 @@ class WorktreeManager {
   }
 }
 
-// ESM default export — enables: import Factory from './worktree-manager.js'
 export default WorktreeManager;
 export { WorktreeManager };

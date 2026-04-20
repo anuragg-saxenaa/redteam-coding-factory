@@ -6,7 +6,7 @@
  *  3) Coverage must not regress versus baseline.
  */
 
-const fs = require('fs');
+import fs from 'node:fs';
 
 function readJson(filePath) {
   const raw = fs.readFileSync(filePath, 'utf8');

@@ -10,12 +10,10 @@
  *   #14 Per-task log file: agent stdout is captured to agent-logs/<id>.log
  */
 
-'use strict';
+import path from 'node:path';
+import fs from 'node:fs';
 
-const path = require('path');
-const fs   = require('fs');
-
-const AgentRunner = require('./agent-runner');
+import AgentRunner from './agent-runner.js';
 
 class AgentIntegration {
   /**
@@ -216,6 +214,5 @@ class AgentIntegration {
   }
 }
 
-// ESM default export — enables: import Factory from './agent-integration.js'
 export default AgentIntegration;
 export { AgentIntegration };

@@ -11,7 +11,7 @@
  *  - Deduplication against already-queued tasks
  */
 
-const { execSync } = require('child_process');
+import { execSync } from 'node:child_process';
 
 class GitHubIntake {
   /**
@@ -197,6 +197,5 @@ class GitHubIntake {
   }
 }
 
-// ESM default export — enables: import Factory from './github-intake.js'
 export default GitHubIntake;
 export { GitHubIntake };

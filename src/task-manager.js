@@ -6,11 +6,9 @@
  *       so a mid-write crash can never leave the queue corrupted.
  */
 
-'use strict';
-
-const fs   = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+import fs from 'node:fs';
+import path from 'node:path';
+import { v4 as uuidv4 } from 'uuid';
 
 class TaskManager {
   constructor(queuePath = './data/task-queue.jsonl') {
@@ -136,6 +134,5 @@ class TaskManager {
   }
 }
 
-// ESM default export — enables: import Factory from './task-manager.js'
 export default TaskManager;
 export { TaskManager };

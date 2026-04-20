@@ -6,11 +6,9 @@
  *   #14 Per-task log streaming: agent stdout is written to agent-logs/<taskId>.log
  */
 
-'use strict';
-
-const { spawn }    = require('child_process');
-const path         = require('path');
-const fs           = require('fs');
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import fs from 'node:fs';
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 min
 
@@ -147,6 +145,5 @@ class AgentRunner {
   }
 }
 
-// ESM default export — enables: import Factory from './agent-runner.js'
 export default AgentRunner;
 export { AgentRunner };

@@ -138,4 +138,4 @@ function evaluateCopilotReviewMetrics(events, policy = {}) {
   };
 }
 
-export { collectMetrics, generateReview, evaluateCopilotReviewMetrics };
+export { evaluateCopilotReviewMetrics };

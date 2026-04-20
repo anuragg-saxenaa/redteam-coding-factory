@@ -5,10 +5,10 @@
  * Each stage is wrapped with guarded SelfHealingCI retries and scoped remediation.
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
-const { SelfHealingCI } = require('./self-healing-ci');
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
+import { SelfHealingCI } from './self-healing-ci.js';
 
 class CodeExecutor {
   constructor(worktreeManager, options = {}) {
@@ -299,6 +299,5 @@ class CodeExecutor {
   }
 }
 
-// ESM default export — enables: import Factory from './code-executor.js'
 export default CodeExecutor;
 export { CodeExecutor };
