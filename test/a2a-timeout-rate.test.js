@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /**
+import assert from 'assert';
  * A2A timeout-rate verification
  * Simulates transient timeout conditions and checks final timeout rate < 5%.
  */

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import assert from 'assert';
 import { evaluateGovernance } from '../src/llm-test-governance.js';
 
 let passed = 0;

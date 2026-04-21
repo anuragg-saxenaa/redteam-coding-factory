@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /**
+import assert from 'assert';
  * Integration Test Suite for Coding Factory Phase 6 — Multi-Repo Orchestration
  */
 

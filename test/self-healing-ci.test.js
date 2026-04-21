@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /**
+import assert from 'assert';
  * Self-Healing CI Tests — TICKET-2026-02-24-01
  */
 

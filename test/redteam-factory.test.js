@@ -6,6 +6,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import assert from 'assert';
 import { execSync } from 'child_process';
 import { RedTeamFactory } from '../src/redteam-factory.js';
 import { fileURLToPath } from 'url';

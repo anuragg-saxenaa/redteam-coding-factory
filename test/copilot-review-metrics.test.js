@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import assert from 'assert';
 import { evaluateCopilotReviewMetrics } from '../src/copilot-review-metrics.js';
 
 let passed = 0;

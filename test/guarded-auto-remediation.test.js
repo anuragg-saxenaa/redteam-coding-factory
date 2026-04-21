@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /**
+import assert from 'assert';
  * Guarded Auto-Remediation Integration Tests — TICKET-2026-02-25-02
  */
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /**
+import assert from 'assert';
  * AgentRunner unit tests
  * Tests construction, prompt building, availability check.
  * Does NOT actually spawn coding agents (those are integration tests).

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import assert from 'assert';
 import { evaluateBestOfN, selectBestCandidate } from '../src/best-of-n-benchmark.js';
 
 let passed = 0;

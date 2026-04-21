@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /**
+import assert from 'assert';
  * Integration Test Suite for Coding Factory Phases 1-5
  * Turnkey: single command, no external dependencies
  */
