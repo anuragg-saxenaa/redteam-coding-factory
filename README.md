@@ -478,7 +478,6 @@ See [`PRODUCTION-DEPLOYMENT.md`](PRODUCTION-DEPLOYMENT.md) for full setup includ
 2. Add an `eng-coding-factory` cron that calls the factory via `sessions_spawn`
 3. Set `model: minimax/MiniMax-M2.7` (Coding Plan key required)
 4. RESEARCH inner-loop handles OSS discovery automatically — no extra config needed
-
 ---
 
 ## 🤝 Contributing
