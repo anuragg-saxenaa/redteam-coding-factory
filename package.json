@@ -3,7 +3,6 @@
   "version": "1.1.0",
   "description": "Autonomous coding factory — picks GitHub issues, implements fixes across Java/Spring AI/TypeScript/Python/Mobile, opens PRs. Works as a standalone tool, OpenClaw skill, or Claude Code MCP plugin.",
   "main": "src/factory.js",
-  "type": "module",
   "bin": {
     "redteam-factory": "src/cli.js",
     "coding-factory-mcp": "src/mcp-server.js"

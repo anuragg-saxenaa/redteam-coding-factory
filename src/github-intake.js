@@ -147,8 +147,42 @@ class GitHubIntake {
   }
 
   /**
+   * Check if there is already an open PR addressing this issue.
+   * Searches for PRs that reference the issue number in their title or body,
+   * and also checks if the issue is assigned to someone (meaning someone else
+   * is already working on it).
+   * @param {Object} issue - GitHub issue object
+   * @returns {boolean}
+   */
+  _hasExistingPR(issue) {
+    try {
+      // Check open PRs that mention this issue number
+      const raw = execSync(
+        `${this.ghPath} pr list --repo ${this.repo} --state open --search "closes #${issue.number} OR fixes #${issue.number} OR resolves #${issue.number}" --json number,title,url --limit 5`,
+        { stdio: 'pipe', timeout: 15000 }
+      ).toString();
+      const prs = JSON.parse(raw);
+      if (prs.length > 0) {
+        console.log(`[GitHubIntake] Skipping issue #${issue.number} — existing open PR(s): ${prs.map(p => p.url).join(', ')}`);
+        return true;
+      }
+
+      // Also check if issue is already assigned to someone
+      const assignees = (issue.assignees || []);
+      if (assignees.length > 0) {
+        console.log(`[GitHubIntake] Skipping issue #${issue.number} — already assigned to: ${assignees.map(a => a.login || a).join(', ')}`);
+        return true;
+      }
+    } catch (err) {
+      console.warn(`[GitHubIntake] PR-existence check failed for #${issue.number}: ${err.message} — skipping issue to be safe`);
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Poll for new issues, convert to tasks, and optionally claim them.
-   * Skips issues already claimed this session.
+   * Skips issues already claimed this session, in-progress, assigned, or with an existing open PR.
    *
    * @param {string} repoPath - Local repo path
    * @param {string} branch - Branch to target
@@ -168,6 +202,11 @@ class GitHubIntake {
       const labels = (issue.labels || []).map(l => l.name || l);
       if (labels.includes(this.claimLabel)) {
         console.log(`[GitHubIntake] Skipping issue #${issue.number} (already in-progress)`);
+        continue;
+      }
+
+      // Skip issues that already have an open PR or are assigned to someone
+      if (this._hasExistingPR(issue)) {
         continue;
       }
 

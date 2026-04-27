@@ -136,13 +136,39 @@ class AgentRunner {
   }
 
   _buildPrompt(task) {
+    const issueNumber = task.metadata && task.metadata.issueNumber;
+    const issueRepo   = task.metadata && task.metadata.repo ? task.metadata.repo : (task.repo || '');
+    const prCheckCmd  = issueNumber && issueRepo
+      ? `gh pr list --repo ${issueRepo} --state open --search "closes #${issueNumber} OR fixes #${issueNumber} OR resolves #${issueNumber}" --limit 5`
+      : null;
+
+    const prCheckBlock = prCheckCmd
+      ? [
+          ``,
+          `BEFORE WRITING ANY CODE:`,
+          `Run: ${prCheckCmd}`,
+          `If any open PRs are returned, STOP — write status=skipped with reason "existing PR already addresses this issue" and exit.`,
+          `Also check: gh issue view ${issueNumber} --repo ${issueRepo} --json assignees — if assigned to someone else, STOP and skip.`,
+        ]
+      : [];
+
     return [
       `Task: ${task.title}`,
       ``,
       task.description || '(no description)',
       ``,
-      `Repository: ${task.repo || '(current)'}`,
+      `Repository: ${issueRepo || '(current)'}`,
       `Branch: ${task.branch || 'main'}`,
+      ...prCheckBlock,
+      ``,
+      `QUALITY RULES (non-negotiable):`,
+      `- You are a senior engineer with 25 years of experience. Every submission must reflect that standard.`,
+      `- No garbage code, no placeholder TODOs, no auto-generated boilerplate left in. Implement properly or skip.`,
+      `- Every change must be tested. Add tests if none exist for the area you touched.`,
+      `- Write code that looks human-written: meaningful names, clean logic, no scaffolding noise.`,
+      `- If a reviewer comments on your PR, address the feedback before picking up new work.`,
+      `- When in doubt about scope or correctness, skip and explain why. A skipped issue beats a bad PR.`,
+      `- Always use --signoff on commits (-s flag). DCO is required on all OSS contributions.`,
     ].join('\n');
   }
 }
