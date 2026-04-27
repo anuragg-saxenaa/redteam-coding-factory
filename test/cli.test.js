@@ -1,13 +1,12 @@
-const assert = require('assert');
-const fs = require('fs');
-const os = require('os');
-const { spawnSync } = require('child_process');
-const path = require('path');
+import assert from 'assert';
+import fs from 'fs';
+import os from 'os';
+import { spawnSync } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
-// Smoke test: CLI help prints and exits 0.
 const cli = path.join(__dirname, '..', 'src', 'cli.js');
-
-const res = spawnSync('node', [cli, '--help'], { encoding: 'utf8' });
 assert.strictEqual(res.status, 0, `expected exit 0, got ${res.status}\n${res.stderr}`);
 assert.match(res.stdout, /RedTeam Coding Factory CLI/, 'help output should include title');
 assert.match(res.stdout, /redteam-factory tasks/, 'help output should include tasks command');

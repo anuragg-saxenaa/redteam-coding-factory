@@ -1,0 +1,13 @@
+branch=poc/task-20260301-041505
+worktree=/Users/redinside/Development/Codebase/projects/RedTeam/github/redteam-coding-factory/.worktrees/poc/task-20260301-041505
+agent=codex
+agent_rc=0
+test_cmd=echo test-ok >/dev/null
+test_rc=0
+result=pass
+timestamp=2026-03-01T09:15:06Z
+create_pr=false
+pr_url=
+ci_attempts=0
+ci_result=not_run
+ci_last_error=

@@ -17,12 +17,10 @@
  *   - Emits structured logs for every significant event
  */
 
-'use strict';
-
-const fs     = require('fs');
-const path   = require('path');
-const https  = require('https');
-const http   = require('http');
+import fs from 'node:fs';
+import path from 'node:path';
+import https from 'node:https';
+import http from 'node:http';
 
 // ---------------------------------------------------------------------------
 // Tiny lock helper (no external deps)
@@ -354,4 +352,4 @@ class IssueWatcher {
   }
 }
 
-module.exports = IssueWatcher;
+export default IssueWatcher;

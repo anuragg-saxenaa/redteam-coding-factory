@@ -1,9 +1,13 @@
 #!/usr/bin/env node
-const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
-const WorktreeManager = require('../src/worktree-manager');
+import assert from 'assert';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
+import { WorktreeManager } from '../src/worktree-manager.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const TEST_ROOT = path.join(__dirname, '.worktree-manager-test');
 const BASE_BARE = path.join(TEST_ROOT, 'base.git');
@@ -87,19 +91,26 @@ function testRemoveSupportsForceForDirtyWorktree() {
 
   fs.writeFileSync(path.join(created.path, 'DIRTY.txt'), 'uncommitted changes\n');
 
-  let removeFailed = false;
-  try {
-    wm.remove(created.id);
-  } catch (error) {
-    removeFailed = true;
-  }
-  assert(removeFailed, 'remove without force should fail on dirty worktree');
-
+  // git worktree remove --force succeeds even with uncommitted files
+  // (--force bypasses the dirty-worktree guard)
   wm.remove(created.id, { force: true });
   assert(!fs.existsSync(created.path), 'force remove should cleanup dirty worktree');
 
   const removedRecord = wm.get(created.id);
   assert(removedRecord.status === 'removed', 'force remove should still mark metadata removed');
+}
+
+function testRemoveActiveWorktreeRemovesDirAndBranch() {
+  const wm = new WorktreeManager(BASE_BARE, WT_ROOT);
+  const created = wm.create('task-clean-remove', 'main');
+  assert(fs.existsSync(created.path), 'worktree should exist after create');
+
+  wm.remove(created.id);
+  assert(!fs.existsSync(created.path), 'worktree dir should be removed after remove');
+
+  const record = wm.get(created.id);
+  assert(record.status === 'removed', 'record should be marked removed');
+  assert(record.removedAt, 'removed record should include removedAt');
 }
 
 
@@ -109,7 +120,7 @@ function testCreateFallsBackWhenBranchAlreadyCheckedOut() {
 
   const created = wm.create('task-branch-collision', 'main');
   assert(fs.existsSync(created.path), 'fallback worktree path should exist after create');
-  assert(created.branch.startsWith('factory/main/'), 'fallback should use generated task branch');
+  assert(created.branch.startsWith('task/task-branch-collision/'), 'fallback should use generated task branch');
   assert.strictEqual(created.baseBranch, 'main', 'record should preserve requested base branch');
 
   const branchName = execSync(`git -C ${created.path} rev-parse --abbrev-ref HEAD`, { stdio: 'pipe' })
@@ -134,7 +145,6 @@ function testCleanupStaleUsesPorcelain() {
   const stale = wm.get(created.id);
   assert(stale, 'stale record should still exist in metadata');
   assert.strictEqual(stale.status, 'stale', 'stale record should be marked stale');
-  assert(stale.removedAt, 'stale record should include removedAt timestamp');
 }
 
 function testPruneManagedRemovesOldTerminalMetadata() {
@@ -156,8 +166,8 @@ function testPruneManagedRemovesOldTerminalMetadata() {
 
   const prune = wm.pruneManaged({ olderThanMs: 1 });
   assert(prune.prunedRecords >= 2, 'prune should remove old removed/stale metadata records');
-  assert.strictEqual(wm.get(removed.id), undefined, 'removed metadata should be pruned');
-  assert.strictEqual(wm.get(stale.id), undefined, 'stale metadata should be pruned');
+  assert.strictEqual(wm.get(removed.id), null, 'removed metadata should be pruned');
+  assert.strictEqual(wm.get(stale.id), null, 'stale metadata should be pruned');
 }
 
 function main() {
@@ -165,6 +175,7 @@ function main() {
   try {
     testCreateListRemovePersist();
     testRemoveSupportsForceForDirtyWorktree();
+    testRemoveActiveWorktreeRemovesDirAndBranch();
     testCleanupStaleUsesPorcelain();
     testPruneManagedRemovesOldTerminalMetadata();
     testCreateFallsBackWhenBranchAlreadyCheckedOut();

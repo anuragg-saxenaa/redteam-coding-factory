@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-const { evaluateBestOfN, selectBestCandidate } = require('../src/best-of-n-benchmark');
+import assert from 'assert';
+import { evaluateBestOfN, selectBestCandidate } from '../src/best-of-n-benchmark.js';
 
 let passed = 0;
 let failed = 0;

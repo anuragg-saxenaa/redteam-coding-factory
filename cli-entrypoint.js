@@ -1,4 +1,4 @@
 #!/usr/bin/env node
 
 // RedTeam Coding Factory CLI entrypoint
-require('./src/cli.js');
+import("./src/cli.js");

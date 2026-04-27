@@ -117,4 +117,5 @@ class ResultValidator {
   }
 }
 
-module.exports = ResultValidator;
+export default ResultValidator;
+export { ResultValidator };

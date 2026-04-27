@@ -9,8 +9,11 @@
  * or the OpenClaw message plugin is available.
  */
 
-const fs   = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_METRICS_PATH = path.join(__dirname, '..', 'ops', 'metrics.json');
 const MAX_ENTRIES = 500;
@@ -57,8 +60,8 @@ class MetricsWriter {
    *   prUrl       — optional PR URL if created
    */
   record({ task, startTime, endTime, passed, attempts = 1, stages = {}, error = null, prUrl = null }) {
-    const start = new Date(startTime);
-    const end   = endTime ? new Date(endTime) : new Date();
+    const start = startTime ? new Date(startTime) : new Date();
+    const end   = endTime   ? new Date(endTime)   : new Date();
     const durationMs = end - start;
 
     const entry = {
@@ -143,4 +146,5 @@ class MetricsWriter {
   }
 }
 
-module.exports = MetricsWriter;
+export default MetricsWriter;
+export { MetricsWriter };

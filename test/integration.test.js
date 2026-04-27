@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 /**
+import assert from 'assert';
  * Integration Test Suite for Coding Factory Phases 1-5
  * Turnkey: single command, no external dependencies
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
-const CodingFactory = require('../src/factory');
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+import { CodingFactory } from '../src/factory.js';
+import { fileURLToPath } from 'url';
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 const TEST_REPO_NAME = 'integration-test-repo';
 const TEST_REPO_PATH = path.join(__dirname, TEST_REPO_NAME);
@@ -41,7 +44,7 @@ function setupTestRepo() {
   execSync(`git clone ${TEST_BARE_REPO_PATH} ${TEST_REPO_PATH}`);
   execSync(`git -C ${TEST_REPO_PATH} config user.email "test@example.com"`);
   execSync(`git -C ${TEST_REPO_PATH} config user.name "Test User"`);
-  
+
   // Minimal fixture: no npm dependencies
   fs.writeFileSync(path.join(TEST_REPO_PATH, 'README.md'), '# Test Repo\n');
   fs.writeFileSync(path.join(TEST_REPO_PATH, 'test.sh'), '#!/bin/bash\necho "Tests passed"\nexit 0\n');
@@ -49,12 +52,12 @@ function setupTestRepo() {
   fs.writeFileSync(path.join(TEST_REPO_PATH, 'package.json'), JSON.stringify({
     name: "test-proj",
     version: "1.0.0",
-    scripts: { 
-      "lint": "bash lint.sh", 
-      "test": "bash test.sh" 
+    scripts: {
+      "lint": "bash lint.sh",
+      "test": "bash test.sh"
     }
   }, null, 2));
-  
+
   execSync(`git -C ${TEST_REPO_PATH} add .`);
   execSync(`git -C ${TEST_REPO_PATH} commit -m "Initial commit"`);
   execSync(`git -C ${TEST_REPO_PATH} push origin main`);
@@ -94,7 +97,7 @@ async function test2_ValidationGate(factory) {
       { name: 'test', success: false, error: 'test failed' }
     ]
   };
-  
+
   const taskRecord = factory.taskManager.get(task.id);
   taskRecord.validationResult = mockValidationResult;
   factory.taskManager.persistQueue();
@@ -116,12 +119,12 @@ async function test3_ForceMode(factory) {
 
   // Log a force override
   factory.criticGate.logForceOverride(task.id, 'Test force override for validation failure');
-  
+
   const taskRecord = factory.taskManager.get(task.id);
   if (!taskRecord.forceOverrides || taskRecord.forceOverrides.length === 0) {
     throw new Error('Force override not logged');
   }
-  
+
   console.log('✓ Test 3 passed: force override logged to task record');
 }
 
@@ -148,11 +151,11 @@ async function test4_SelfHealing(factory) {
   // Enqueue fix task
   const fixTask = factory.validator.enqueueFix(taskRecord, mockValidationResult);
   if (!fixTask) throw new Error('Fix task not enqueued');
-  
+
   // Verify fix task was created
   const fixTaskRecord = factory.taskManager.get(fixTask.id);
   if (!fixTaskRecord) throw new Error('Fix task record not found');
-  
+
   console.log('✓ Test 4 passed: fix task enqueued on validation failure');
 }
 
@@ -165,7 +168,7 @@ async function main() {
     await test2_ValidationGate(factory);
     await test3_ForceMode(factory);
     await test4_SelfHealing(factory);
-    
+
     console.log('\n=== ALL INTEGRATION TESTS PASSED ===\n');
     console.log('Phases 1-5 verified:');
     console.log('✓ Task intake + worktree isolation');

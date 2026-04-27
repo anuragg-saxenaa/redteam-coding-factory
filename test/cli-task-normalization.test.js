@@ -1,6 +1,5 @@
-const assert = require('assert');
-
-const { normalizeTasks, parseArgs } = require('../src/cli');
+import assert from 'assert';
+import { normalizeTasks, parseArgs } from '../src/cli.js';
 
 const config = {
   repos: [

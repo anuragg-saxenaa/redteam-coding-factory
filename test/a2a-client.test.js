@@ -1,25 +1,26 @@
+#!/usr/bin/env node
 /**
  * A2AClient unit tests
  * Verifies timeout retry, fallback dispatch, and hard-failure behavior.
  */
 
-const assert = require('assert');
-const A2AClient = require('../src/a2a-client');
+import assert from 'assert';
+import { A2AClient } from '../src/a2a-client.js';
 
 let passed = 0;
 let failed = 0;
 
 function ok(condition, label) {
   if (condition) {
-    console.log(`  \u2713 ${label}`);
+    console.log(`  ✓ ${label}`);
     passed += 1;
   } else {
-    console.error(`  \u2717 ${label}`);
+    console.error(`  ✗ ${label}`);
     failed += 1;
   }
 }
 
-(async () => {
+async function runTests() {
   console.log('Test 1: retries timeout then succeeds via sessions_send');
   {
     let callCount = 0;
@@ -121,4 +122,6 @@ function ok(condition, label) {
   console.log('');
   console.log(`=== A2AClient Tests: ${passed} passed, ${failed} failed ===`);
   process.exit(failed > 0 ? 1 : 0);
-})();
+}
+
+runTests();

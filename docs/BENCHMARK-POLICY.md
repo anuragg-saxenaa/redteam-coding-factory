@@ -3,10 +3,15 @@
 ## Purpose
 Use a single, stable benchmark policy so factory changes are evaluated consistently over time.
 
-## Canonical Metric
+## Canonical Metrics
 - **Primary metric**: `SWE-bench Verified solve rate`.
 - **Definition**: percentage of SWE-bench Verified tasks fully resolved by the factory within policy limits.
 - **Formula**: `solve_rate = solved / attempted * 100`.
+- **Secondary metric (P2)**: `Terminal-Bench 2.0 solve rate`.
+- **Definition**: percentage of Terminal-Bench 2.0 CLI/terminal tasks solved end-to-end.
+- **Rationale**: Terminal-Bench measures real-world terminal task automation — more directly relevant to coding factory's autonomous issue-fixing and CLI-driven workflows than SWE-bench's pure software engineering task domain. SWE-bench remains the primary gate for regressions; Terminal-Bench is used for capability trending and POC milestone reporting.
+- **Benchmark leaderboard (Terminal-Bench 2.0, April 2026)**: Claude Mythos Preview 82.0% (Apr 13 2026), GPT-5.3-Codex 77.3%, GPT-5.4 75.1%, Claude Opus 4.6 74.7%.
+  - Source: benchlm.ai/benchmarks/terminalBench2 (updated Apr 13 2026)
 
 ## Required Report Fields
 Each benchmark run must include:

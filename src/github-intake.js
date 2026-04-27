@@ -11,7 +11,7 @@
  *  - Deduplication against already-queued tasks
  */
 
-const { execSync } = require('child_process');
+import { execSync } from 'node:child_process';
 
 class GitHubIntake {
   /**
@@ -197,4 +197,5 @@ class GitHubIntake {
   }
 }
 
-module.exports = GitHubIntake;
+export default GitHubIntake;
+export { GitHubIntake };

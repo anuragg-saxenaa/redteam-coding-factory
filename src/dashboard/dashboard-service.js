@@ -3,10 +3,10 @@
  * Provides API endpoints for monitoring the RedTeam Coding Factory
  */
 
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+import express from 'express';
+import path from 'node:path';
+import fs from 'node:fs';
+import { v4 as uuidv4 } from 'uuid';
 
 class DashboardService {
   constructor(factory, options = {}) {
@@ -234,4 +234,4 @@ class DashboardService {
   }
 }
 
-module.exports = DashboardService;
+export default DashboardService;

@@ -326,4 +326,5 @@ class SelfHealingCI {
   }
 }
 
-module.exports = { SelfHealingCI, classifyFailure, FAILURE_CLASSES };
+export { SelfHealingCI, classifyFailure, FAILURE_CLASSES };
+export default { SelfHealingCI, classifyFailure, FAILURE_CLASSES };

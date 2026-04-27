@@ -8,12 +8,10 @@
  *       infinite hangs.
  */
 
-'use strict';
-
-const { execFile, execFileSync } = require('child_process');
-const { promisify }              = require('util');
-const path                       = require('path');
-const CriticGate                 = require('./critic-gate');
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
+import path from 'node:path';
+import CriticGate from './critic-gate.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -185,4 +183,5 @@ class PushPRManager {
   }
 }
 
-module.exports = PushPRManager;
+export default PushPRManager;
+export { PushPRManager };

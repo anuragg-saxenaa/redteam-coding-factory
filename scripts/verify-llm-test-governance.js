@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-const path = require('path');
-const { readJson, evaluateGovernance } = require('../src/llm-test-governance');
+import path from 'path';
+import { readJson, evaluateGovernance } from '../src/llm-test-governance.js';
 
 function parseArgs(argv) {
   const args = {};

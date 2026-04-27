@@ -1,8 +1,12 @@
+#!/usr/bin/env node
 /**
+import assert from 'assert';
  * Self-Healing CI Tests — TICKET-2026-02-24-01
  */
 
-const { SelfHealingCI, classifyFailure, FAILURE_CLASSES } = require('../src/self-healing-ci');
+import { SelfHealingCI, classifyFailure, FAILURE_CLASSES } from '../src/self-healing-ci.js';
+import path from 'path';
+import os from 'os';
 
 let passed = 0;
 let failed = 0;
@@ -85,12 +89,9 @@ console.log('\nTest 2: stage passes first attempt');
   await healer5.runStage('test', async () => ({ success: false, error: 'ECONNREFUSED', output: '' }));
   assert(escalated === true, 'onEscalate callback was called');
 
-// ─── Test 7: MetricsWriter records pass and fail ──────────────────────────────
+// ─── Test 7: MetricsWriter records pass and fail ──────────────────────────
   console.log('\nTest 7: MetricsWriter records entries');
-  const path = require('path');
-  const os   = require('os');
-  const MetricsWriter = require('../src/metrics-writer');
-  const tmpPath = path.join(os.tmpdir(), `metrics-test-${Date.now()}.json`);
+  const { MetricsWriter } = await import('../src/metrics-writer.js');
   const mw = new MetricsWriter({ metricsPath: tmpPath });
 
   const dummyTask = { id: 'task-001', title: 'Test Task', repo: 'test-repo', branch: 'main' };

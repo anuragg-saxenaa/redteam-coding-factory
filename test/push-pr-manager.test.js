@@ -3,8 +3,8 @@
  * PushPRManager tests — conflict/rebase reactions (Phase 2 scale)
  */
 
-const assert = require('assert');
-const PushPRManager = require('../src/push-pr-manager');
+import assert from 'assert';
+import { PushPRManager } from '../src/push-pr-manager.js';
 
 let passed = 0;
 let failed = 0;

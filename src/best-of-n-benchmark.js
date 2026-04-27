@@ -118,9 +118,4 @@ function evaluateBestOfN({ tasks = [], n = 1 }) {
   };
 }
 
-module.exports = {
-  normalizeAttempt,
-  candidateComparator,
-  selectBestCandidate,
-  evaluateBestOfN,
-};
+export { normalizeAttempt, candidateComparator, selectBestCandidate, evaluateBestOfN };

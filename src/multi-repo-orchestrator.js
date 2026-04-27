@@ -4,9 +4,9 @@
  * Coordinates task distribution, cross-repo dependencies, and result aggregation
  */
 
-const CodingFactory = require('./factory');
-const path = require('path');
-const fs = require('fs');
+import CodingFactory from './factory.js';
+import path from 'node:path';
+import fs from 'node:fs';
 
 class MultiRepoOrchestrator {
   constructor(config = {}) {
@@ -309,4 +309,5 @@ class MultiRepoOrchestrator {
   }
 }
 
-module.exports = MultiRepoOrchestrator;
+export default MultiRepoOrchestrator;
+export { MultiRepoOrchestrator };

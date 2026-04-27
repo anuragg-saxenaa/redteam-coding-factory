@@ -11,18 +11,16 @@
  *   #15 Adaptive backoff when queue is empty (up to 60 s)
  */
 
-'use strict';
-
-const http       = require('http');
-const path       = require('path');
-const TaskManager        = require('./task-manager');
-const WorktreeManager    = require('./worktree-manager');
-const CodeExecutor       = require('./code-executor');
-const AgentIntegration   = require('./agent-integration');
-const ResultValidator    = require('./result-validator');
-const CriticGate         = require('./critic-gate');
-const PushPRManager      = require('./push-pr-manager');
-const MetricsWriter      = require('./metrics-writer');
+import http       from 'node:http';
+import path       from 'node:path';
+import TaskManager        from './task-manager.js';
+import WorktreeManager    from './worktree-manager.js';
+import CodeExecutor       from './code-executor.js';
+import AgentIntegration   from './agent-integration.js';
+import ResultValidator    from './result-validator.js';
+import CriticGate         from './critic-gate.js';
+import PushPRManager      from './push-pr-manager.js';
+import MetricsWriter      from './metrics-writer.js';
 
 class CodingFactory {
   constructor(config = {}) {
@@ -289,4 +287,6 @@ class CodingFactory {
   }
 }
 
-module.exports = CodingFactory;
+// ESM default export — enables: import Factory from './factory.js'
+export default CodingFactory;
+export { CodingFactory };

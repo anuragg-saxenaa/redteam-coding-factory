@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
+import assert from 'assert';
  * Guarded Auto-Remediation Integration Tests — TICKET-2026-02-25-02
  */
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { execSync } = require('child_process');
-const WorktreeManager = require('../src/worktree-manager');
-const CodeExecutor = require('../src/code-executor');
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { execSync } from 'child_process';
+import { WorktreeManager } from '../src/worktree-manager.js';
+import { CodeExecutor } from '../src/code-executor.js';
 
 let passed = 0;
 let failed = 0;

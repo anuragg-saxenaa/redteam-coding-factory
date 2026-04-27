@@ -22,10 +22,10 @@
  * ]
  */
 
-const fs = require('fs');
-const path = require('path');
-const RedTeamFactory = require('./redteam-factory');
-const IssueWatcher = require('./issue-watcher');
+import fs from 'node:fs';
+import path from 'node:path';
+import RedTeamFactory from './redteam-factory.js';
+import IssueWatcher from './issue-watcher.js';
 
 function usage(exitCode = 0) {
   const msg = [
@@ -254,16 +254,13 @@ async function main() {
   process.stdout.write(`\nRun complete. Results:\n${JSON.stringify(results, null, 2)}\n`);
 }
 
-if (require.main === module) {
+import { fileURLToPath } from 'node:url';
+const __filename = fileURLToPath(import.meta.url);
+if (process.argv[1] === __filename) {
   main().catch((err) => {
     process.stderr.write(`Error: ${err && err.stack ? err.stack : String(err)}\n`);
     process.exit(1);
   });
 }
 
-module.exports = {
-  parseArgs,
-  readJson,
-  normalizeTasks,
-  main,
-};
+export { parseArgs, readJson, normalizeTasks, main };
