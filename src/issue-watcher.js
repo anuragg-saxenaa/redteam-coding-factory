@@ -121,10 +121,11 @@ const DEFAULT_POLL_INTERVAL_MS    = 15 * 60 * 1000;  // 15 min
 const MAINTENANCE_INTERVAL_CYCLES = 4;                // every 4 poll cycles
 
 class IssueWatcher {
-  constructor(factory, config = {}) {
-    this.factory         = factory;
+  constructor(config = {}) {
+    // config.repoPath is accepted for forward-compatibility but this class does
+    // not itself interact with a local git repo — it talks to the GitHub API only.
     this.repo            = config.repo            || '';
-    this.dataDir         = config.dataDir         || (factory.dataDir || './data');
+    this.dataDir         = config.dataDir         || './data';
     this.pollIntervalMs  = config.pollIntervalMs  || DEFAULT_POLL_INTERVAL_MS;
     this.skipLabels      = config.skipLabels      || ['wontfix', 'invalid', 'duplicate', 'factory/in-progress', 'factory/done'];
     this.fixLabels       = config.fixLabels       || ['good first issue', 'help wanted', 'bug', 'factory/fixable'];
@@ -132,6 +133,7 @@ class IssueWatcher {
     this._isFixableOverride = config.isFixable    || null;
     this.onPollError     = config.onPollError     || null;
     this.onTaskSubmit    = config.onTaskSubmit    || null;
+    this.onTaskFail      = config.onTaskFail      || null;
 
     this._timer          = null;
     this._running        = false;
@@ -164,6 +166,8 @@ class IssueWatcher {
     this._lock.release();
     console.log('[IssueWatcher] Stopped');
   }
+
+  stats() { return this.getStats(); }
 
   getStats() {
     return {
@@ -261,10 +265,8 @@ class IssueWatcher {
     const issues = Array.isArray(res.body) ? res.body : [];
     console.log(`[IssueWatcher] Fetched ${issues.length} open issues from ${this.repo}`);
 
-    // Check how many factory tasks are currently open
-    const openTasks = this.factory.taskManager
-      ? this.factory.taskManager.list().filter(t => t.status === 'queued' || t.status === 'in_progress').length
-      : 0;
+    // Check how many tasks have been submitted this cycle
+    const openTasks = 0;
 
     let submitted = 0;
     for (const issue of issues) {
@@ -306,13 +308,12 @@ class IssueWatcher {
       };
 
       try {
-        const submitted_task = this.factory.submitTask
-          ? this.factory.submitTask(task)
-          : this.factory.taskManager?.intake(task);
+        if (this.onTaskSubmit) {
+          this.onTaskSubmit(task, issue);
+        }
         this._processedIssues.add(issueKey);
         submitted++;
         console.log(`[IssueWatcher] Submitted task for issue #${issue.number}: ${issue.title}`);
-        if (this.onTaskSubmit) { try { this.onTaskSubmit(submitted_task, issue); } catch (_) {} }
 
         // Label the issue so we don't pick it up again on next poll
         await this._labelIssue(owner, repoName, issue.number, 'factory/in-progress').catch(() => {});
@@ -343,14 +344,8 @@ class IssueWatcher {
   }
 
   _runMaintenance() {
-    try {
-      if (this.factory.worktreeManager?.pruneManaged) {
-        this.factory.worktreeManager.pruneManaged({ olderThanMs: 24 * 60 * 60 * 1000 });
-        console.log('[IssueWatcher] Maintenance: pruned old worktrees');
-      }
-    } catch (e) {
-      console.warn(`[IssueWatcher] Maintenance error (non-fatal): ${e.message}`);
-    }
+    // No-op: worktree maintenance is the responsibility of the MCP server
+    // or the consuming CLI, not IssueWatcher itself.
   }
 }
 

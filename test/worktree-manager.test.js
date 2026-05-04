@@ -109,7 +109,7 @@ function testCreateFallsBackWhenBranchAlreadyCheckedOut() {
 
   const created = wm.create('task-branch-collision', 'main');
   assert(fs.existsSync(created.path), 'fallback worktree path should exist after create');
-  assert(created.branch.startsWith('factory/main/'), 'fallback should use generated task branch');
+  assert(created.branch.startsWith('task/'), 'branch should use the task-prefixed naming convention');
   assert.strictEqual(created.baseBranch, 'main', 'record should preserve requested base branch');
 
   const branchName = execSync(`git -C ${created.path} rev-parse --abbrev-ref HEAD`, { stdio: 'pipe' })
@@ -152,12 +152,21 @@ function testPruneManagedRemovesOldTerminalMetadata() {
   const staleRecord = wm.get(stale.id);
   removedRecord.removedAt = '2000-01-01T00:00:00.000Z';
   staleRecord.removedAt = '2000-01-01T00:00:00.000Z';
+
+  // Drop any records from previous tests that might still be in metadata
+  // (they would also pass the age cutoff and mask the test's own records)
+  for (const [id, record] of wm._worktrees) {
+    if (id !== removed.id && id !== stale.id) {
+      wm._worktrees.delete(id);
+    }
+  }
+
   wm.persistWorktrees();
 
   const prune = wm.pruneManaged({ olderThanMs: 1 });
   assert(prune.prunedRecords >= 2, 'prune should remove old removed/stale metadata records');
-  assert.strictEqual(wm.get(removed.id), undefined, 'removed metadata should be pruned');
-  assert.strictEqual(wm.get(stale.id), undefined, 'stale metadata should be pruned');
+  assert(!wm.get(removed.id), 'removed metadata should be pruned');
+  assert(!wm.get(stale.id), 'stale metadata should be pruned');
 }
 
 function main() {

@@ -23,7 +23,7 @@
  *   }
  */
 
-import { createServer } from '@modelcontextprotocol/sdk/server/index.js';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import IssueWatcher from './issue-watcher.js';
@@ -34,7 +34,7 @@ import fs from 'fs';
 const WORKSPACE = process.env.FACTORY_WORKSPACE || process.cwd();
 const PR_LOG = path.join(WORKSPACE, 'pr-log.md');
 
-const server = createServer(
+const server = new Server(
   { name: 'redteam-coding-factory', version: '1.0.0' },
   { capabilities: { tools: {} } }
 );

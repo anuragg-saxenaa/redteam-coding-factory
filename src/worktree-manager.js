@@ -97,14 +97,14 @@ class WorktreeManager {
     return Array.from(this._worktrees.values());
   }
 
-  remove(id) {
+  remove(id, { force = false } = {}) {
     const record = this._worktrees.get(id);
     if (!record) return;
 
     try {
-      execFileSync('git', ['-C', this.baseRepo, 'worktree', 'remove', '--force', record.path], { stdio: 'pipe' });
+      execFileSync('git', ['-C', this.baseRepo, 'worktree', 'remove', ...(force ? ['--force'] : []), record.path], { stdio: 'pipe' });
     } catch (e) {
-      // If git worktree remove fails, try rmdir
+      if (!force) throw e;
       try { fs.rmdirSync(record.path, { recursive: true }); } catch (_) {}
     }
 
@@ -113,7 +113,9 @@ class WorktreeManager {
       execFileSync('git', ['-C', this.baseRepo, 'branch', '-D', record.branch], { stdio: 'pipe' });
     } catch (_) {}
 
-    this._worktrees.delete(id);
+    record.status   = 'removed';
+    record.removedAt = new Date().toISOString();
+    this._worktrees.set(id, record);
     this._saveMetadata();
   }
 
@@ -127,13 +129,14 @@ class WorktreeManager {
 
     for (const [id, record] of this._worktrees) {
       if (record.status === 'stale') {
+        record.removedAt = record.removedAt || new Date().toISOString();
         try { fs.rmdirSync(record.path, { recursive: true }); dirsPruned++; } catch (_) {}
-        this._worktrees.delete(id);
         continue;
       }
       // Mark active worktrees whose directory no longer exists as stale
       if (record.status === 'active' && !fs.existsSync(record.path)) {
-        record.status = 'stale';
+        record.status    = 'stale';
+        record.removedAt = new Date().toISOString();
         staleMarked++;
       }
     }
@@ -152,12 +155,19 @@ class WorktreeManager {
    * Prune managed worktrees older than olderThanMs.
    */
   pruneManaged({ olderThanMs = 24 * 60 * 60 * 1000 } = {}) {
-    const cutoff = Date.now() - olderThanMs;
+    const cutoff  = Date.now() - olderThanMs;
+    let prunedRecords = 0;
     for (const [id, record] of this._worktrees) {
-      if (new Date(record.createdAt).getTime() < cutoff) {
-        try { this.remove(id); } catch (_) {}
+      const ts = record.removedAt
+        ? new Date(record.removedAt).getTime()
+        : new Date(record.createdAt).getTime();
+      if (ts < cutoff) {
+        this._worktrees.delete(id);
+        prunedRecords++;
       }
     }
+    this._saveMetadata();
+    return { prunedRecords };
   }
 
   // ── Metadata persistence ───────────────────────────────────────────────
@@ -173,6 +183,10 @@ class WorktreeManager {
     } catch (e) {
       console.warn(`[WorktreeManager] Could not save metadata: ${e.message}`);
     }
+  }
+
+  persistWorktrees() {
+    this._saveMetadata();
   }
 
   _loadMetadata() {

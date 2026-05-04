@@ -22,10 +22,11 @@
  * ]
  */
 
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 const RedTeamFactory = require('./redteam-factory');
-const IssueWatcher = require('./issue-watcher');
+const IssueWatcher  = require('./issue-watcher');
+const FactoryGuardian = require('./factory-guardian');
 
 function usage(exitCode = 0) {
   const msg = [
@@ -54,6 +55,8 @@ function usage(exitCode = 0) {
     '  --retry-budget Max retry budget across stages (watch mode; default: 6)',
     '  --max-tasks   Stop daemon after N processed issues (watch mode)',
     '  --max-polls   Stop daemon after N poll cycles (watch mode)',
+    '  --pid-file    Path to PID file for single-instance lock (default: .factory.pid in dataDir)',
+    '  --guardian-interval  Guardian heartbeat interval in seconds (default: 30)',
     '  --dashboard   Enable dashboard (default: true)',
     '  --help       Show this help',
     '',
@@ -79,6 +82,8 @@ function parseArgs(argv) {
     else if (a === '--retry-budget') args.retryBudget = parseInt(argv[++i], 10);
     else if (a === '--max-tasks') args.maxTasks = parseInt(argv[++i], 10);
     else if (a === '--max-polls') args.maxPolls = parseInt(argv[++i], 10);
+    else if (a === '--pid-file') args.pidFile = argv[++i];
+    else if (a === '--guardian-interval') args.guardianInterval = parseInt(argv[++i], 10);
     else if (a === '--dashboard') args.dashboard = argv[++i] === 'true';
     else args._.push(a);
   }
@@ -164,37 +169,33 @@ async function main() {
       process.exit(1);
     }
 
-    // Determine repoPath — first repo in config or explicit github.repoPath
-    const repoPath = config.github.repoPath
-      || (config.repos && config.repos[0] && config.repos[0].path)
-      || process.cwd();
+    const pidFile = args.pidFile || (config.dataDir
+      ? path.join(config.dataDir, '.factory.pid')
+      : path.join(process.cwd(), '.factory.pid'));
+
+    const guardian = new FactoryGuardian({
+      pidPath             : pidFile,
+      heartbeatIntervalMs : (args.guardianInterval || 30) * 1000,
+      heartbeatTimeoutMs  : (args.guardianInterval || 30) * 1000 * 3,
+    });
 
     const watcher = new IssueWatcher({
       repo: config.github.repo,
-      repoPath,
-      branch: config.github.branch || 'main',
-      label: config.github.label || 'factory-ready',
       pollIntervalMs: (args.interval || config.github.pollIntervalSec || 60) * 1000,
-      maxConcurrent: config.github.maxConcurrent || 1,
-      agent: args.agent || config.github.agent || 'codex',
-      agentTimeoutMs: (config.github.agentTimeoutSec || 300) * 1000,
-      enablePush: args.push || config.enablePush || false,
-      createPR: args.pr || config.createPR || false,
-      autoClose: args.autoClose || config.github.autoClose || false,
-      dataDir: config.dataDir,
-      maxRetries: config.maxRetries || 3,
-      enableAutoRemediation: args.remediate || config.enableAutoRemediation || false,
-      maxRetryBudget: args.retryBudget || config.maxRetryBudget || 6,
-      maxTasksPerRun: args.maxTasks || config.github.maxTasksPerRun,
-      maxPolls: args.maxPolls || config.github.maxPolls,
-      onPoll: (count) => {
-        if (count > 0) console.log(`[CLI] Found ${count} issues`);
+      skipLabels     : config.github.skipLabels,
+      fixLabels      : config.github.fixLabels,
+      maxOpenTasks   : config.github.maxOpenTasks || 5,
+      dataDir        : config.dataDir,
+      onPollError: (err) => {
+        console.error(`[CLI] Poll error: ${err.message}`);
       },
-      onTaskComplete: (issueNumber, result) => {
-        console.log(`[CLI] ✓ Issue #${issueNumber} completed`);
+      onPoll: (stats) => {
+        guardian.heartbeat();
+        if (stats.found > 0) console.log(`[CLI] Found ${stats.found} fixable issues`);
+        if (stats.errors > 0) console.error(`[CLI] ${stats.errors} errors this cycle`);
       },
-      onTaskFail: (issueNumber, error) => {
-        console.error(`[CLI] ✗ Issue #${issueNumber} failed: ${error}`);
+      onTaskSubmit: async (task, issue) => {
+        console.log(`[CLI] Processing issue #${issue.number}: ${issue.title}`);
       },
     });
 
@@ -210,16 +211,19 @@ async function main() {
       console.log('[CLI] Watch mode (daemon)...');
       console.log('[CLI] Press Ctrl+C to stop');
 
-      // Graceful shutdown
       const shutdown = () => {
         console.log('\n[CLI] Shutting down...');
         watcher.stop();
+        guardian.stop();
         const stats = watcher.stats();
         console.log(`Final stats: ${JSON.stringify(stats)}`);
         process.exit(0);
       };
-      process.on('SIGINT', shutdown);
+      process.on('SIGINT',  shutdown);
       process.on('SIGTERM', shutdown);
+
+      // Claim PID lock before starting
+      if (!guardian.start()) return; // start() exits if another instance holds the lock
 
       watcher.start();
     }
