@@ -50,10 +50,21 @@ class RedTeamFactory {
       console.log(`\n[RedTeamFactory] ${signal} received — graceful shutdown started`);
 
       try {
-        // 1. Stop the autonomous loop so no new tasks are dequeued
+        // 1. Drain one task per factory before exiting (call-triggered only, no loop)
         if (this.orchestrator) {
           for (const factory of this.orchestrator.factories?.values?.() || []) {
-            if (typeof factory.stopAutonomousLoop === 'function') factory.stopAutonomousLoop();
+            if (typeof factory.processOnce === 'function') {
+              try {
+                const result = await factory.processOnce({ useAgent: false, doPushPR: false });
+                if (result) {
+                  console.log(`[RedTeamFactory] Shutdown drain processed task: ${result.taskId}`);
+                } else {
+                  console.log(`[RedTeamFactory] Shutdown drain: no tasks pending`);
+                }
+              } catch (e) {
+                console.warn(`[RedTeamFactory] Shutdown drain error: ${e.message}`);
+              }
+            }
           }
         }
 
@@ -192,7 +203,7 @@ class RedTeamFactory {
       completed   : byStatus('completed'),
       failed      : byStatus('failed'),
       total       : tasks.length,
-      isRunning   : this.orchestrator?.isRunning || false,
+      isRunning   : false,
       enablePush  : this.config.enablePush,
       createPR    : this.config.createPR,
       enableAutoRemediation  : this.config.enableAutoRemediation,

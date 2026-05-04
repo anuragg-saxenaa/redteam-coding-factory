@@ -1,6 +1,7 @@
 /**
  * Coding Factory Orchestrator — Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5
- * Coordinates task intake, worktree creation, agent execution, validation, push/PR, and autonomous loop
+ * Coordinates task intake, worktree creation, agent execution, validation, and push/PR.
+ * Stateless and call-triggered only. The scheduler (Hermes cron) owns the loop.
  */
 
 const TaskManager = require('./task-manager');
@@ -52,8 +53,6 @@ class CodingFactory {
     this.metrics = new MetricsWriter({
       metricsPath: config.metricsPath || path.join(this.dataDir, 'metrics.json'),
     });
-    
-    this.isRunning = false;
   }
 
   /**
@@ -186,36 +185,15 @@ class CodingFactory {
   }
 
   /**
-   * Start autonomous loop
-   * Continuously processes tasks from queue
+   * Process one task from the queue — call-triggered, no autonomous loop.
+   * The scheduler (Hermes cron) owns the loop; this method does one shot only.
+   * @param {Object} options
+   * @param {boolean} [options.useAgent=false] — spawn agent for task
+   * @param {boolean} [options.doPushPR=false] — create push/PR after validation
+   * @returns {Object} summary of what was processed, or null if queue empty
    */
-  async startAutonomousLoop(useAgent = false, doPushPR = false, intervalMs = 5000) {
-    if (this.isRunning) {
-      console.log('[Factory] Autonomous loop already running');
-      return;
-    }
-
-    this.isRunning = true;
-    console.log(`[Factory] Starting autonomous loop (interval: ${intervalMs}ms, useAgent: ${useAgent}, doPushPR: ${doPushPR}, validationMode: ${this.validationMode})`);
-
-    while (this.isRunning) {
-      const result = await this.processNext(useAgent, doPushPR);
-      
-      if (!result) {
-        console.log('[Factory] Queue empty, waiting...');
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
-      } else {
-        console.log(`[Factory] Task ${result.taskId} processed`);
-      }
-    }
-  }
-
-  /**
-   * Stop autonomous loop
-   */
-  stopAutonomousLoop() {
-    this.isRunning = false;
-    console.log('[Factory] Autonomous loop stopped');
+  async processOnce({ useAgent = false, doPushPR = false } = {}) {
+    return await this.processNext(useAgent, doPushPR);
   }
 
   /**
@@ -290,7 +268,6 @@ class CodingFactory {
       failed,
       total: tasks.length,
       worktrees: this.worktreeManager.list().length,
-      isRunning: this.isRunning,
       validationMode: this.validationMode,
       enablePush: this.enablePush,
       createPR: this.createPR,
