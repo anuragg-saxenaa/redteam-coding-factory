@@ -7,6 +7,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue)](#)
 [![MCP](https://img.shields.io/badge/Claude%20Code-MCP%20Plugin-blueviolet)](#-use-as-a-claude-code--mcp-plugin)
 
+
 ---
 
 ## ⚡ Quickstart — Claude Code Plugin
