@@ -502,5 +502,4 @@ This factory is self-hosted and runs autonomously — it may pick up your issues
 
 ---
 
-
 *Built and maintained by [@anuragg-saxenaa](https://github.com/anuragg-saxenaa) · Running 24/7 · MIT License*
